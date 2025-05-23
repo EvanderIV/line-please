@@ -1,0 +1,254 @@
+{
+    "title": "Rooftop Confession",
+    "author": "EvanderIV",
+    "date": "2023-10-01",
+    "tags": ["romance", "drama"],
+    "content": {
+        "scene": {
+            "location": "rooftop",
+            "time": "evening",
+            "weather": "clear"
+        },
+        "characters": [
+            {
+                "replace": "_CHARACTER_A",
+                "name": "Alex",
+                "sex": "male",
+                "hair-length": "short",
+                "hair-color": "#222222",
+                "eye-color": "#8888FF",
+                "clothes": "casual",
+                "controller": "audience"
+            },
+            {
+                "replace": "_CHARACTER_B",
+                "name": "Lisa",
+                "sex": "female",
+                "hair-length": "long",
+                "hair-color": "#DD4444",
+                "eye-color": "#FF8888",
+                "clothes": "casual",
+                "controller": "director"
+            }
+        ],
+        "narrative": [
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_A",
+                "text": "I can't believe we made it up here.",
+                "sprite": "happy"
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_B",
+                "text": "It's beautiful, isn't it? Just us and the stars.",
+                "sprite": "happy"
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_A",
+                "text": "The stars are quite beautiful, but...",
+                "sprite": "talking"
+            },
+            {
+                "type": "interact",
+                "interaction": "short-answer",
+                "placeholder": "adjective",
+                "character": "_CHARACTER_A",
+                "text": "they're not nearly as _INTERACT_BLANK_ as you.",
+                "sprite": "smile"
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_B",
+                "text": "Oh, _CHARACTER_A... you always know what to say.",
+                "sprite": "smile",
+                "overlay": "blush"
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_A",
+                "text": "I mean it. I really like you, _CHARACTER_B.",
+                "sprite": "serious"
+            },
+            {
+                "type": "directive",
+                "character": "_CHARACTER_B",
+                "sprite": "nervous",
+                "overlay": "blush",
+                "options": [
+                    {
+                        "summary": "Admit feelings",
+                        "text": "I like you too, _CHARACTER_A.",
+                        "i1": 0
+                    },
+                    {
+                        "summary": "Turn down",
+                        "text": "I don't feel the same way.",
+                        "i1": 1
+                    },
+                    {
+                        "summary": "Friendzone",
+                        "text": "Let's just be friends.",
+                        "i1": 1
+                    },
+                    {
+                        "summary": "Reject",
+                        "text": "Eww, no.",
+                        "i1": 2
+                    }
+                ]
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_A",
+                "i1": [
+                    {
+                        "text": "I... Wow... I'm just so glad!",
+                        "sprite": "happy"
+                    },
+                    {
+                        "text": "Oh... I... don't know what to say. I didn't expect that.",
+                        "sprite": "neutral"
+                    },
+                    {
+                        "text": "What the heck was that for? I thought we had something special!",
+                        "sprite": "mad"
+                    }
+                ]
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_A",
+                "i1": [
+                    {
+                        "text": "You have no idea how relieved I am to hear that.",
+                        "sprite": "happy"
+                    },
+                    {
+                        "text": "I was really hoping you would agree.",
+                        "sprite": "sad",
+                        "overlay": "sweat"
+                    },
+                    {
+                        "text": "You could at least have said it nicely, or acknowledged my feelings.",
+                        "sprite": "mad"
+                    }
+                ]
+            },
+            {
+                "type": "dialogue",
+                "character": "_CHARACTER_B",
+                "i1": [
+                    {
+                        "text": "I feel the same way, _CHARACTER_A. I really do.",
+                        "sprite": "happy"
+                    },
+                    {
+                        "text": "I'm sorry, I just don't feel that way about you.",
+                        "sprite": "sad"
+                    },
+                    {
+                        "text": "I don't even know you that well, _CHARACTER_A. Don't go pretending we were ever more than friends.",
+                        "sprite": "mad"
+                    }
+                ]
+            },
+            {
+                "character": "_CHARACTER_A",
+                "i1": [
+                    {
+                        "type": "interact",
+                        "interaction": "short-answer",
+                        "placeholder": "verb",
+                        "text": "While we're up here alone, would you mind if you and I _INTERACT_BLANK_?",
+                        "sprite": "smile"
+                    },
+                    {
+                        "type": "interact",
+                        "interaction": "short-answer",
+                        "placeholder": "noun/verb",
+                        "text": "I guess I should have seen this coming. I should have known you were _INTERACT_BLANK_.",
+                        "sprite": "serious"
+                    },
+                    {
+                        "type": "interact",
+                        "interaction": "short-answer",
+                        "placeholder": "noun",
+                        "text": "You know what? Forget it. I don't need this. I don't need you, and I defninitely don't need your _INTERACT_BLANK_.",
+                        "sprite": "mad"
+                    }
+                ]
+            },
+            {
+                "character": "_CHARACTER_B",
+                "i1": [
+                    {
+                        "type": "directive",
+                        "sprite": "shocked",
+                        "overlay": "blush",
+                        "options": [
+                            {
+                                "summary": "Accept",
+                                "text": "I... I would love that.",
+                                "i2": 0
+                            },
+                            {
+                                "summary": "Decline",
+                                "text": "I'd prefer not to, if that's okay.",
+                                "i2": 1
+                            },
+                            {
+                                "summary": "Show ambivilence",
+                                "text": "I'm okay with it if you are.",
+                                "i2": 0
+                            }
+                        ]
+                    },
+                    {
+                        "type": "directive",
+                        "sprite": "sad",
+                        "options": [
+                            {
+                                "summary": "Apologize",
+                                "text": "I'm sorry, I didn't mean to hurt you. Really.",
+                                "i2": 0
+                            },
+                            {
+                                "summary": "Defend",
+                                "text": "I don't think I did anything wrong—and since when is this a personal issue? Why are you blaming me?",
+                                "i2": 1
+                            },
+                            {
+                                "summary": "Attack",
+                                "text": "What I should've known is that you would just try to make it personal. You always do stuff like that, and you know it.",
+                                "i2": 2
+                            }
+                        ]
+                    },
+                    {
+                        "type": "directive",
+                        "sprite": "mad",
+                        "options": [
+                            {
+                                "summary": "Apologize",
+                                "text": "I'm sorry, I didn't mean to hurt you. Really.",
+                                "i2": 0
+                            },
+                            {
+                                "summary": "Defend",
+                                "text": "I don't think I did anything wrong—and since when is this a personal issue? Why are you blaming me?",
+                                "i2": 1
+                            },
+                            {
+                                "summary": "Attack",
+                                "text": "What I didn't need is for you to go and make things personal. Now you're just playing dirty, and you always do stuff like that.",
+                                "i2": 2
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
