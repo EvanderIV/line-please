@@ -1441,46 +1441,104 @@
 
             port.addEventListener('mouseup', (e) => {
                 if (isWiring && startPort && startPort !== port) { // Ensure wiring is active and not clicking the same port
-                    const fromNodeId = startPort.dataset.nodeId, fromPortId = startPort.dataset.portId;
-                    const toNodeId = port.dataset.nodeId, toPortId = port.dataset.portId;
-                    const startNode = findNodeById(fromNodeId), endNode = findNodeById(toNodeId);
-                    const startPortClassType = startPort.classList.contains('input') ? 'input' : 'output';
-                    const endPortClassType = port.classList.contains('input') ? 'input' : 'output';
+                    const initialFromNodeId = startPort.dataset.nodeId;
+                    const initialFromPortId = startPort.dataset.portId;
+                    const initialToNodeId = port.dataset.nodeId;
+                    const initialToPortId = port.dataset.portId;
 
-                    let canConnect = true; // Assume connection is possible
-                    // Basic validation: no self-connection, no input-to-input or output-to-output
-                    if (!startNode || !endNode || fromNodeId === toNodeId || startPortClassType === endPortClassType) canConnect = false;
-                    // Scene node specific logic
-                    else if (endNode.type === 'Scene' && (startNode.type !== 'Character' || port.dataset.portType !== 'character-input')) canConnect = false;
-                    else if (startNode.type === 'Scene' && (fromPortId !== 'narrative-out' || port.dataset.portId !== 'general-input')) canConnect = false;
-                    // Character node specific logic
-                    else if (startNode.type === 'Character' && (endNode.type !== 'Scene' || port.dataset.portType !== 'character-input')) canConnect = false;
-                    // Terminate node specific logic
-                    else if (endNode.type === 'Terminate' && startPortClassType === 'input') canConnect = false; // Cannot wire *to* a Terminate node's input from another input
-                    else if (startNode.type === 'Terminate') canConnect = false; // Cannot wire *from* a Terminate node at all
+                    const initialStartNode = findNodeById(initialFromNodeId);
+                    const initialEndNode = findNodeById(initialToNodeId);
+
+                    const initialStartPortType = startPort.classList.contains('input') ? 'input' : 'output';
+                    const initialEndPortType = port.classList.contains('input') ? 'input' : 'output';
+
+                    let sNodeId, sPortId, tNodeId, tPortId; // s = source (output), t = target (input)
+                    let sNode, tNode;
+                    let actualOutputPortEl, actualInputPortEl;
+
+                    let canConnect = true;
+
+                    if (!initialStartNode || !initialEndNode || initialFromNodeId === initialToNodeId) {
+                        canConnect = false; // Invalid nodes or self-connection
+                    } else if (initialStartPortType === initialEndPortType) {
+                        canConnect = false; // Cannot connect input-to-input or output-to-output
+                    } else if (initialStartPortType === 'output' && initialEndPortType === 'input') {
+                        // Standard connection: output -> input
+                        sNodeId = initialFromNodeId; sPortId = initialFromPortId;
+                        tNodeId = initialToNodeId; tPortId = initialToPortId;
+                        sNode = initialStartNode; tNode = initialEndNode;
+                        actualOutputPortEl = startPort; actualInputPortEl = port;
+                    } else if (initialStartPortType === 'input' && initialEndPortType === 'output') {
+                        // Reversed connection: user dragged input -> output, treat as output -> input
+                        sNodeId = initialToNodeId; sPortId = initialToPortId;     // Source is the 'output' port (where mouseup happened)
+                        tNodeId = initialFromNodeId; tPortId = initialFromPortId; // Target is the 'input' port (where mousedown happened)
+                        sNode = initialEndNode; tNode = initialStartNode;
+                        actualOutputPortEl = port; actualInputPortEl = startPort;
+                    } else {
+                        canConnect = false; // Should be covered by previous checks
+                    }
+
+                    // Apply specific connection rules if basic conditions are met
+                    if (canConnect) {
+                        // Rule 1: Output from a Terminate node is not allowed (Terminate has no output ports).
+                        if (sNode.type === 'Terminate') {
+                            canConnect = false;
+                        }
+                        // Rule 2: Scene output ('narrative-out') specific connections.
+                        // It must go to a 'general-input' port of a node that is NOT a Character node.
+                        else if (sNode.type === 'Scene' && actualOutputPortEl.dataset.portId === 'narrative-out') {
+                            if (actualInputPortEl.dataset.portId !== 'general-input' || tNode.type === 'Character') {
+                                canConnect = false;
+                            }
+                        }
+                        // Rule 3: Character output ('char-out') specific connections.
+                        // It must go to a Scene's 'character-input' port.
+                        else if (sNode.type === 'Character' && actualOutputPortEl.dataset.portId === 'char-out') {
+                            if (!(tNode.type === 'Scene' && actualInputPortEl.dataset.portType === 'character-input')) {
+                                canConnect = false;
+                            }
+                        }
+                        // Rule 4: Scene input ('character-input') specific connections.
+                        // If the target is a Scene's 'character-input' port, the source must be a Character's 'char-out'.
+                        else if (tNode.type === 'Scene' && actualInputPortEl.dataset.portType === 'character-input') {
+                            if (sNode.type !== 'Character' || actualOutputPortEl.dataset.portId !== 'char-out') {
+                                canConnect = false;
+                            }
+                        }
+                        // (Add other specific inter-node/port type rules here if needed in the future)
+                    }
 
 
                     if (canConnect) {
-                        // Remove existing wire if target is an input port (inputs only allow one connection)
-                        if (endPortClassType === 'input') wires = wires.filter(w => !(w.toNode === toNodeId && w.toPort === toPortId));
-                        // Remove existing wire if source is a Scene narrative-out or Character char-out (single output)
-                        if ((startNode.type === 'Scene' && fromPortId === 'narrative-out') || (startNode.type === 'Character' && fromPortId === 'char-out')) {
-                            wires = wires.filter(w => !(w.fromNode === fromNodeId && w.fromPort === fromPortId));
+                        // Remove existing wire if target is an input port (inputs only allow one connection).
+                        // tNodeId and tPortId always refer to the actual input port at this stage.
+                        wires = wires.filter(w => !(w.toNode === tNodeId && w.toPort === tPortId));
+
+                        // Remove existing wire if source is a single-output port.
+                        // sNodeId and sPortId always refer to the actual output port.
+                        const isSingleOutputPortType =
+                            (sNode.type === 'Scene' && sPortId === 'narrative-out') ||
+                            (sNode.type === 'Character' && sPortId === 'char-out') ||
+                            (['Dialogue', 'Interact', 'Weather', 'Time', 'Sound', 'Delay'].includes(sNode.type) && sPortId === 'general-output');
+
+                        if (isSingleOutputPortType) {
+                            wires = wires.filter(w => !(w.fromNode === sNodeId && w.fromPort === sPortId));
                         }
 
-                        // Create new wire object (color will be set by updateAllWireColors)
-                        const newWire = { id: generateId(), fromNode: fromNodeId, fromPort: fromPortId, toNode: toNodeId, toPort: toPortId };
+                        // Create the new wire with correctly oriented source and target.
+                        const newWire = { id: generateId(), fromNode: sNodeId, fromPort: sPortId, toNode: tNodeId, toPort: tPortId };
                         wires.push(newWire);
                         updateAllWireColors(); // Recalculate all wire colors
                         redrawWires(); attemptSaveGraphToCookies();
 
-                        // If connecting a Character to a Scene, update the Scene's character input ports
-                        if (endNode.type === 'Scene' && startNode.type === 'Character') {
-                            updateSceneCharacterPorts(endNode, document.getElementById(endNode.id));
+                        // If connecting a Character to a Scene, update the Scene's character input ports.
+                        // tNode is the Scene, sNode is the Character.
+                        if (tNode.type === 'Scene' && sNode.type === 'Character') {
+                            updateSceneCharacterPorts(tNode, document.getElementById(tNode.id));
                         }
                     }
                 }
-                stopWiring(); // Always stop wiring on mouseup
+                stopWiring(); // Always stop wiring on mouseup, regardless of connection success
             });
 
 
