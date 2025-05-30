@@ -8,27 +8,33 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overscroll-behavior: none; 
-            display: flex; 
+            overscroll-behavior: none;
+            display: flex;
         }
         #left-panel {
             width: 200px;
-            background-color: #e5e7eb; 
+            background-color: #e5e7eb;
             padding: 16px;
             height: 100vh;
             overflow-y: auto;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            z-index: 2000; 
+            z-index: 2000;
+            position: relative; /* Added for positioning child button */
+            transition: margin-left 0.3s ease-in-out; /* Added for smooth slide */
         }
         .dark #left-panel {
-            background-color: #374151; 
-            color: #d1d5db; 
+            background-color: #374151;
+            color: #d1d5db;
         }
+        #left-panel.minimized { /* Style for minimized panel */
+            margin-left: -200px; /* Moves panel off-screen to the left */
+        }
+
         .panel-node-type {
             padding: 8px 12px;
             margin-bottom: 8px;
             background-color: #fff;
-            border: 1px solid #d1d5db; 
+            border: 1px solid #d1d5db;
             border-radius: 6px;
             cursor: grab;
             text-align: center;
@@ -36,164 +42,326 @@
             font-size: 0.875rem;
         }
         .dark .panel-node-type {
-            background-color: #4b5563; 
-            border-color: #6b7280; 
+            background-color: #4b5563;
+            border-color: #6b7280;
         }
 
         #main-content-area {
             flex-grow: 1;
-            position: relative; 
+            position: relative;
             height: 100vh;
-            overflow: hidden; 
+            overflow: hidden;
         }
 
-        #graph-canvas { 
-            width: 100%; 
-            height: 100%; 
-            position: absolute; 
+        #graph-canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
             top:0; left:0;
-            overflow: hidden; 
-            background-color: #f3f4f6; 
+            overflow: hidden;
+            background-color: #f3f4f6;
         }
         .dark #graph-canvas {
-            background-color: #1f2937; 
+            background-color: #1f2937;
         }
 
         #world-container {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%; 
-            height: 100%;
+            width: 100000%; /* Allow for "infinite" panning */
+            height: 100000%; /* Allow for "infinite" panning */
             transform-origin: 0 0;
         }
 
 
         .node {
-            position: absolute; 
+            position: absolute;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             cursor: grab;
             user-select: none;
-            min-width: 200px; 
-            transition: box-shadow 0.2s ease-in-out; 
-            background-color: #fff; 
-            border: 1px solid #d1d5db; 
+            min-width: 200px;
+            transition: box-shadow 0.2s ease-in-out, border-color 0.3s ease;
+            background-color: #fff;
+            border: 1px solid #d1d5db;
 
         }
-        .node-scene { 
-            min-height: 80px; 
+        .node-scene {
+            min-height: 80px;
         }
         .node.selected {
-            box-shadow: 0 0 0 3px #3b82f6, 0 6px 12px rgba(0,0,0,0.2); 
-            z-index: 1000 !important; 
+            box-shadow: 0 0 0 3px #3b82f6, 0 6px 12px rgba(0,0,0,0.2);
+            z-index: 1000 !important; /* Ensure selected node is on top */
         }
+        .node-error-highlight {
+            border-color: #ef4444 !important; /* red-500 */
+            box-shadow: 0 0 0 3px #ef4444, 0 6px 12px rgba(239,68,68,0.4) !important;
+        }
+
         .node-title {
             padding: 8px 12px;
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
             font-weight: 600;
-            background-color: #e5e7eb; 
-            color: #374151; 
+            background-color: #e5e7eb;
+            color: #374151;
         }
         .node-content {
             padding: 12px;
             font-size: 0.875rem;
-            position: relative; 
+            position: relative; /* For port label positioning */
         }
         .node-port {
             width: 12px;
             height: 12px;
             border-radius: 50%;
             position: absolute;
-            background-color: #9ca3af; 
+            background-color: #9ca3af;
             cursor: crosshair;
             transition: background-color 0.2s;
-            z-index: 1; 
+            z-index: 1; /* Above node content for easier clicking */
+            margin-top: 24px; /* Default vertical alignment with first potential element */
         }
         .node-port:hover {
-            background-color: #3b82f6; 
+            background-color: #3b82f6;
         }
         .node-port.input { left: -6px; }
         .node-port.output { right: -6px; }
-        .node-port.output-decision { right: -6px; } 
+        .node-port.output-decision { right: -6px; } /* Specific for directive options */
 
         .port-label {
             position: absolute;
-            font-size: 0.65rem; 
-            color: #4b5563; 
-            pointer-events: none; 
+            font-size: 0.65rem;
+            color: #4b5563;
+            pointer-events: none; /* So they don't interfere with port clicks */
             white-space: nowrap;
-            line-height: 12px; 
+            line-height: 12px; /* Aligns with port height */
+            margin-top: -9px; /* Adjust to center vertically with the port's default top */
         }
         .dark .port-label {
-            color: #9ca3af; 
+            color: #9ca3af;
         }
         .port-label.input { left: 10px; transform: translateY(-50%); }
         .port-label.output { right: 10px; transform: translateY(-50%); text-align: right; }
 
         .dark .node {
-            background-color: #374151; 
-            color: #d1d5db; 
-            border-color: #4b5563; 
+            background-color: #374151;
+            color: #d1d5db;
+            border-color: #4b5563;
         }
         .dark .node-title {
-            background-color: #4b5563; 
-            color: #f3f4f6; 
+            background-color: #4b5563;
+            color: #f3f4f6;
         }
         .dark .node-port {
-            background-color: #6b7280; 
+            background-color: #6b7280;
         }
         .dark .node-port:hover {
-            background-color: #60a5fa; 
+            background-color: #60a5fa;
         }
-        .dark .modal-content, .dark .settings-panel, .dark #read-story-modal-content {
-            background-color: #374151; 
-            color: #d1d5db; 
+        .dark .modal-content, .dark .settings-panel, .dark #read-story-modal-content, .dark #confirm-new-graph-modal-content {
+            background-color: #374151;
+            color: #d1d5db;
         }
          .dark #read-story-modal-content hr {
             border-color: #4b5563;
         }
         .dark input, .dark textarea, .dark select {
-            background-color: #4b5563; 
-            color: #d1d5db; 
-            border-color: #6b7280; 
+            background-color: #4b5563;
+            color: #d1d5db;
+            border-color: #6b7280;
         }
-        .dark button:not(.panel-node-type) { 
-            background-color: #4f46e5; 
+        .dark input[type="checkbox"] {
+            accent-color: #4f46e5; /* Or your preferred accent */
+        }
+        .dark button:not(.panel-node-type) { /* General button styling for dark mode */
+            background-color: #4f46e5; /* indigo-600 */
             color: white;
         }
         .dark button:not(.panel-node-type):hover {
-            background-color: #4338ca; 
+            background-color: #4338ca; /* indigo-700 */
         }
         .dark .button-secondary {
-             background-color: #4b5563; 
+             background-color: #4b5563; /* gray-600 */
         }
         .dark .button-secondary:hover {
-             background-color: #6b7280; 
+             background-color: #6b7280; /* gray-500 */
+        }
+         .dark .button-danger {
+            background-color: #dc2626; /* Red-600 */
+        }
+        .dark .button-danger:hover {
+            background-color: #b91c1c; /* Red-700 */
         }
 
+        /* Sound Node Specific UI - START */
+        .sound-node-ui {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .selected-sound-display {
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fff;
+        }
+        .dark .selected-sound-display {
+            background-color: #4b5563;
+            border-color: #6b7280;
+        }
+        .selected-sound-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-grow: 1;
+        }
+        .dropdown-arrow-symbol {
+            margin-left: 8px;
+            font-size: 0.8em;
+            transition: transform 0.2s ease-in-out;
+        }
+        .selected-sound-display.open .dropdown-arrow-symbol {
+            transform: rotate(180deg);
+        }
+        .sound-dropdown-list {
+            border: 1px solid #d1d5db;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background-color: #fff;
+            position: relative;
+            z-index: 10;
+            margin-top: -1px;
+            display: flex;
+            flex-direction: column;
+        }
+        .dark .sound-dropdown-list {
+            background-color: #374151;
+            border-color: #6b7280;
+        }
+        .sound-dropdown-list.hidden {
+            display: none;
+        }
+        .sound-list-scroll-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            max-height: 180px;
+        }
+        .sound-category .category-header {
+            padding: 6px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            background-color: #f3f4f6;
+            border-bottom: 1px solid #e5e7eb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .sound-category:first-child .category-header {
+            border-top: none;
+        }
+        .dark .sound-category .category-header {
+            background-color: #4b5563;
+            border-color: #6b7280;
+        }
+        .category-arrow-symbol {
+            margin-right: 6px;
+            transition: transform 0.2s;
+            display: inline-block;
+            width: 10px;
+        }
+        .category-header.expanded .category-arrow-symbol {
+            transform: rotate(90deg);
+        }
+        .category-sounds {
+            padding-left: 10px;
+        }
+        .category-sounds.hidden {
+            display: none;
+        }
+        .sound-item {
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.825rem;
+        }
+        .sound-item:hover, .sound-item.selected {
+            background-color: #e5e7eb;
+        }
+        .dark .sound-item:hover, .dark .sound-item.selected {
+            background-color: #6b7280;
+        }
+        .sound-search-input-node {
+            width: calc(100% - 16px);
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            box-sizing: border-box;
+            margin: 8px;
+            flex-shrink: 0;
+        }
+        .dark .sound-search-input-node {
+            background-color: #4b5563;
+            border-color: #6b7280;
+            color: #d1d5db;
+        }
+        .node-sound-play-btn {
+            background-color: #60a5fa;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .node-sound-play-btn:hover {
+            background-color: #3b82f6;
+        }
+        .dark .node-sound-play-btn {
+            background-color: #3b82f6;
+        }
+        .dark .node-sound-play-btn:hover {
+            background-color: #2563eb;
+        }
+        .node-sound-play-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        /* Sound Node Specific UI - END */
 
-        #wires-svg { 
+
+        #wires-svg {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%; 
+            width: 100%;
             height: 100%;
             pointer-events: none;
-            overflow: visible; 
+            overflow: visible;
         }
         .wire {
-            stroke: #6b7280; 
-            stroke-width: 2.5; 
+            stroke: #6b7280;
+            stroke-width: 2.5;
             fill: none;
-            vector-effect: non-scaling-stroke; 
+            vector-effect: non-scaling-stroke;
         }
         .dark .wire {
-            stroke: #9ca3af; 
+            stroke: #9ca3af;
         }
         .temp-wire {
-            stroke: #3b82f6; 
+            stroke: #3b82f6;
             stroke-width: 2.5;
             fill: none;
             stroke-dasharray: 5,5;
@@ -212,15 +380,57 @@
             justify-content: center;
             z-index: 10000;
         }
-        .modal-content { 
+        .modal-content {
             background-color: white;
             padding: 24px;
             border-radius: 8px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             min-width: 300px;
+            max-width: 500px;
             text-align: center;
         }
-        #read-story-modal-content { 
+
+        #confirm-new-graph-modal-content {
+             background-color: white;
+             padding: 24px;
+             border-radius: 8px;
+             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+             min-width: 350px;
+             text-align: left;
+        }
+        #confirm-new-graph-modal-content h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        #confirm-new-graph-modal-content p {
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            color: #4b5563;
+        }
+        .dark #confirm-new-graph-modal-content p {
+            color: #d1d5db;
+        }
+        #confirm-new-graph-modal-content .checkbox-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        #confirm-new-graph-modal-content .checkbox-container input[type="checkbox"] {
+            margin-right: 0.5rem;
+            height: 1rem;
+            width: 1rem;
+        }
+        #confirm-new-graph-modal-content .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+
+        #read-story-modal-content {
             background-color: white;
             padding: 24px;
             border-radius: 8px;
@@ -228,7 +438,7 @@
             width: 80%;
             max-width: 700px;
             max-height: 80vh;
-            overflow-y: auto;
+            overflow-y: auto; /* Ensures scrolling if content overflows */
             text-align: left;
         }
         #read-story-modal-content h3 { margin-bottom: 1rem; font-size: 1.25rem; font-weight: 600;}
@@ -240,7 +450,7 @@
         .settings-panel {
             position: fixed;
             top: 20px;
-            right: -400px; 
+            right: -400px;
             width: 350px;
             height: calc(100vh - 40px);
             background-color: white;
@@ -254,49 +464,49 @@
         .settings-panel.open {
             right: 0;
         }
-        .settings-panel label { 
+        .settings-panel label {
             display: block;
             margin-bottom: 0.25rem;
-            font-size: 0.875rem; 
-            font-weight: 500; 
+            font-size: 0.875rem;
+            font-weight: 500;
         }
-        .settings-panel .toggle-label-container { 
+        .settings-panel .toggle-label-container {
             display: flex;
             align-items: center;
-            margin-bottom: 0.5rem; 
+            margin-bottom: 0.5rem;
         }
-        .settings-panel .toggle-label { 
-            margin-left: 0.75rem; 
-            font-size: 1rem; 
-            font-weight: 600; 
+        .settings-panel .toggle-label {
+            margin-left: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
         }
         .settings-panel input[type="text"] {
             width: 100%;
             padding: 0.5rem;
-            border: 1px solid #d1d5db; 
-            border-radius: 0.375rem; 
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
             margin-bottom: 0.75rem;
         }
         .dark .settings-panel input[type="text"] {
-            background-color: #4b5563; 
-            border-color: #6b7280; 
-            color: #e5e7eb; 
+            background-color: #4b5563;
+            border-color: #6b7280;
+            color: #e5e7eb;
         }
 
 
         .context-menu {
             position: absolute;
             background-color: white;
-            border: 1px solid #e5e7eb; 
+            border: 1px solid #e5e7eb;
             border-radius: 6px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             z-index: 10001;
-            min-width: 200px; 
+            min-width: 200px;
         }
         .dark .context-menu {
-            background-color: #374151; 
-            border-color: #4b5563; 
-            color: #e5e7eb; 
+            background-color: #374151;
+            border-color: #4b5563;
+            color: #e5e7eb;
         }
         .context-menu-item {
             padding: 8px 12px;
@@ -304,11 +514,11 @@
             font-size: 0.875rem;
         }
         .context-menu-item:hover {
-            background-color: #f3f4f6; 
+            background-color: #f3f4f6;
         }
         .dark .context-menu-item:hover {
-            background-color: #4b5563; 
-            color: #f9fafb; 
+            background-color: #4b5563;
+            color: #f9fafb;
         }
         .expandable-content {
             max-height: 0;
@@ -316,7 +526,7 @@
             transition: max-height 0.3s ease-in-out;
         }
         .expanded .expandable-content {
-            max-height: 500px; 
+            max-height: 500px;
         }
         .node-content label {
             display: block;
@@ -326,11 +536,12 @@
             font-weight: 500;
         }
         .node-content input[type="text"],
+        .node-content input[type="number"], /* Added for number inputs like Delay */
         .node-content textarea,
         .node-content select {
             width: 100%;
             padding: 6px 8px;
-            border: 1px solid #d1d5db; 
+            border: 1px solid #d1d5db;
             border-radius: 4px;
             font-size: 0.875rem;
             margin-bottom: 8px;
@@ -342,13 +553,13 @@
             font-size: 0.8rem;
             margin-top: 4px;
         }
-        /* Shared toggle switch styling */
+
         .toggle-switch:checked ~ .dot {
             transform: translateX(100%);
-            background-color: #4f46e5; 
+            background-color: #4f46e5;
         }
-        .toggle-switch:checked ~ .block { /* The track of the switch */
-            background-color: #6d28d9; 
+        .toggle-switch:checked ~ .block {
+            background-color: #6d28d9;
         }
         .toast-notification {
             position: fixed;
@@ -363,22 +574,31 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
         .dark .toast-notification {
-            background-color: #4b5563; 
-            color: #e5e7eb; 
+            background-color: #4b5563;
+            color: #e5e7eb;
         }
     </style>
 </head>
 <body class="overflow-hidden">
-
     <div id="left-panel">
+        <button id="minimize-panel-btn" title="Minimize Panel" class="absolute top-2 right-2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 z-[2001]">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+        </button>
         <h3 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-200">Nodes</h3>
         </div>
+
+    <button id="restore-panel-btn" title="Restore Panel" class="hidden fixed top-2 left-2 p-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md shadow-md z-[2002]">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
+    </button>
 
     <div id="main-content-area">
         <div id="graph-canvas">
             <div id="world-container">
-                <svg id="wires-svg"></svg>
-                </div>
+                <svg id="wires-svg"></svg> </div>
         </div>
     </div>
 
@@ -394,6 +614,26 @@
         </div>
     </div>
 
+    <div id="confirm-new-graph-modal" class="modal hidden">
+        <div id="confirm-new-graph-modal-content">
+            <h2>Start New Graph?</h2>
+            <p>Starting a new graph will clear your current workspace. Any unsaved changes in the editor will be lost. If you have a graph saved in cookies, this action will not delete it unless you explicitly choose to save this new empty graph over it later.</p>
+            <div class="checkbox-container">
+                <input type="checkbox" id="backup-current-graph-checkbox" checked class="form-checkbox h-5 w-5 text-indigo-600 transition duration-150 ease-in-out">
+                <label for="backup-current-graph-checkbox" class="ml-2 text-sm text-gray-700 dark:text-gray-300">Backup saved graph (from cookies) to JSON file</label>
+            </div>
+            <div class="button-group">
+                <button id="confirm-new-graph-cancel-btn" class="button-secondary bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">
+                    Cancel
+                </button>
+                <button id="confirm-new-graph-confirm-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     <div id="settings-panel" class="settings-panel">
         <h3 class="text-xl font-semibold mb-6">Settings</h3>
 
@@ -405,11 +645,12 @@
             <label for="story-author-input">Author:</label>
             <input type="text" id="story-author-input" placeholder="Enter author name">
         </div>
-        <div class="mb-6"> <label for="story-tags-input">Tags (comma-separated):</label>
+        <div class="mb-6">
+            <label for="story-tags-input">Tags (comma-separated):</label>
             <input type="text" id="story-tags-input" placeholder="e.g., romance, drama">
         </div>
-        
-        <div class="mb-4 border-t border-gray-300 dark:border-gray-600 pt-4 toggle-label-container"> 
+
+        <div class="mb-4 border-t border-gray-300 dark:border-gray-600 pt-4 toggle-label-container">
             <label for="dark-mode-toggle" class="flex items-center cursor-pointer">
                 <div class="relative">
                     <input type="checkbox" id="dark-mode-toggle" class="sr-only toggle-switch">
@@ -437,18 +678,22 @@
         <button id="export-story-narrative-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg w-full mb-3">
             Export Story (Narrative Format)
         </button>
-        
+
         <div class="mb-3">
             <label for="import-json-file" class="block text-sm font-medium mb-1">Import Graph (Editor Format):</label>
             <input type="file" id="import-json-file" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-4">Press Ctrl+S to save the current graph.</p>
-        <p class="text-xs text-red-500 dark:text-red-400 mt-1">Note: If graph is too large for cookies, it may download as a JSON file instead.</p>
+
+        <button id="clear-saved-graph-btn" class="button-danger bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg w-full mt-4">
+            Clear Saved Graph Data (from Cookies)
+        </button>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-6">Press Ctrl+S to save the current graph to cookies (or download if preferred/too large).</p>
     </div>
 
     <div id="context-menu" class="context-menu hidden">
         </div>
-    
+
     <div id="read-story-modal" class="modal hidden">
         <div id="read-story-modal-content">
             <h3>Story Path</h3>
@@ -463,31 +708,41 @@
         let nodes = [];
         let wires = [];
         let selectedNodeId = null;
-        let selectedElement = null; 
+        let selectedElement = null;
         let offset = { x: 0, y: 0 };
         let currentZoom = 1;
         let panX = 0;
         let panY = 0;
         let isPanning = false;
         let lastPanPosition = { x: 0, y: 0 };
-        let lastMouseScreenX = 0; 
-        let lastMouseScreenY = 0; 
+        let lastMouseScreenX = 0;
+        let lastMouseScreenY = 0;
 
+        // Story metadata (part of graph data)
         let storyTitle = "My Awesome Story";
         let storyAuthor = "";
         let storyTags = "";
+
+        // User preferences (stored separately)
+        let darkModeEnabled = false;
         let alwaysDownloadOnSave = false;
 
 
         let isWiring = false;
         let tempWire = null;
         let startPort = null;
-        let wireColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#2AB7CA'];
-        let nextWireColorIndex = 0;
+        // Available colors for wires
+        let wireColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#2AB7CA', '#F07167', '#0081A7', '#00AFB9', '#FEDC97'];
         let highestZIndex = 1;
 
+        // NEW: For revised wire coloring
+        let wireCalculatedColors = new Map(); // Stores calculated color for each wire ID
+        let globalColorPickerIndex = 0; // Used to cycle through wireColors for new paths
+
+
+        // DOM Element References
         const graphCanvas = document.getElementById('graph-canvas');
-        const worldContainer = document.getElementById('world-container'); 
+        const worldContainer = document.getElementById('world-container');
         const wiresSvg = document.getElementById('wires-svg');
         const startupModal = document.getElementById('startup-modal');
         const newStoryBtn = document.getElementById('new-story-btn');
@@ -495,7 +750,7 @@
         const settingsPanel = document.getElementById('settings-panel');
         const darkModeToggle = document.getElementById('dark-mode-toggle');
         const alwaysDownloadToggle = document.getElementById('always-download-toggle');
-        const exportGraphJsonBtn = document.getElementById('export-graph-json-btn'); 
+        const exportGraphJsonBtn = document.getElementById('export-graph-json-btn');
         const exportStoryNarrativeBtn = document.getElementById('export-story-narrative-btn');
         const importJsonFile = document.getElementById('import-json-file');
         const contextMenu = document.getElementById('context-menu');
@@ -507,13 +762,29 @@
         const storyTitleInput = document.getElementById('story-title-input');
         const storyAuthorInput = document.getElementById('story-author-input');
         const storyTagsInput = document.getElementById('story-tags-input');
+        const clearSavedGraphBtn = document.getElementById('clear-saved-graph-btn');
+        const confirmNewGraphModal = document.getElementById('confirm-new-graph-modal');
+        const confirmNewGraphConfirmBtn = document.getElementById('confirm-new-graph-confirm-btn');
+        const confirmNewGraphCancelBtn = document.getElementById('confirm-new-graph-cancel-btn');
+        const backupCurrentGraphCheckbox = document.getElementById('backup-current-graph-checkbox');
+        const minimizePanelBtn = document.getElementById('minimize-panel-btn');
+        const restorePanelBtn = document.getElementById('restore-panel-btn');
 
 
-        const NODE_TYPES = ['Scene', 'Character', 'Dialogue', 'Interact', 'Directive', 'Weather', 'Time'];
-        const PORT_BASE_TOP_OFFSET = 28; 
-        const PORT_SPACING = 25; 
-        const COOKIE_SLICE_MAX_LENGTH = 3980; 
-        const MAX_COOKIE_SLICES = 20; 
+        // Constants
+        const NODE_TYPES = ['Scene', 'Character', 'Dialogue', 'Interact', 'Directive', 'Weather', 'Time', 'Sound', 'Delay', 'Terminate'];
+        const PORT_BASE_TOP_OFFSET = 28; // Vertical offset for the first port from the node content top
+        const PORT_SPACING = 25; // Vertical spacing between multiple ports
+        const COOKIE_SLICE_MAX_LENGTH = 3900; // Max length for a single cookie slice
+        const MAX_COOKIE_SLICES = 20; // Max number of cookie slices for graph data
+        const PREF_DARK_MODE = 'storyCraftPref_darkMode';
+        const PREF_ALWAYS_DOWNLOAD = 'storyCraftPref_alwaysDownload';
+        const GRAPH_DATA_COOKIE_PREFIX = 'storyGraphData_';
+        const GRAPH_DATA_SLICES_COOKIE = 'storyGraphData_slices';
+        const AUDIO_BASE_PATH = '../assets/audio/'; // Path used by the editor for previews
+
+        let PROCESSED_SOUND_LIST = []; // Will hold processed sound file data
+
 
         // --- Utility Functions ---
         function generateId() {
@@ -521,47 +792,121 @@
         }
 
         function getGraphCoordinates(screenX, screenY) {
-            const graphCanvasRect = graphCanvas.getBoundingClientRect(); 
+            const graphCanvasRect = graphCanvas.getBoundingClientRect();
             return {
                 x: (screenX - graphCanvasRect.left - panX) / currentZoom,
                 y: (screenY - graphCanvasRect.top - panY) / currentZoom
             };
         }
-        
+
         function updateWorldTransform() {
             worldContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
-            /*
-            // Set SVG viewBox to match the visible part of the world
-            const viewBoxMinX = -panX / currentZoom;
-            const viewBoxMinY = -panY / currentZoom;
-            const viewBoxWidth = graphCanvas.clientWidth / currentZoom;
-            const viewBoxHeight = graphCanvas.clientHeight / currentZoom;
-            wiresSvg.setAttribute('viewBox', `${viewBoxMinX} ${viewBoxMinY} ${viewBoxWidth} ${viewBoxHeight}`);
-            */
         }
 
         function showToast(message) {
             const existingToast = document.querySelector('.toast-notification');
             if (existingToast) existingToast.remove();
-
             const toast = document.createElement('div');
             toast.textContent = message;
             toast.classList.add('toast-notification');
+            if(darkModeEnabled) toast.classList.add('dark');
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
+        }
+
+        function generateCharacterReplaceKey(name) {
+            if (!name || typeof name !== 'string' || name.trim() === "") return "_UNDEFINED_";
+            let hexString = "";
+            for (let i = 0; i < name.length; i++) {
+                hexString += name.charCodeAt(i).toString(16);
+            }
+            return `_${hexString}_`;
+        }
+
+        function parseTimeToMinutes(timeStr) {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const timeRegex = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i;
+            const match = timeStr.match(timeRegex);
+            if (!match) return null;
+            let hours = parseInt(match[1], 10);
+            const minutes = parseInt(match[2], 10);
+            const ampm = match[3].toUpperCase();
+            if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+            if (ampm === 'PM' && hours !== 12) hours += 12;
+            else if (ampm === 'AM' && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+        }
+
+        function processAudioFiles(rawFilenamesFromPHP) {
+            if (!Array.isArray(rawFilenamesFromPHP)) {
+                console.error("processAudioFiles expects an array, received:", rawFilenamesFromPHP);
+                return [];
+            }
+            return rawFilenamesFromPHP.map(rawFilename => {
+                const parts = rawFilename.split('_');
+                let category = "General";
+                let nameParts = [...parts];
+                if (parts.length > 1) {
+                    category = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+                    nameParts.shift();
+                }
+                const displayName = nameParts.join(' ').replace(/_/g, ' ').split(' ')
+                                       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                       .join(' ');
+                return {
+                    category: category,
+                    displayName: displayName || "Unnamed Sound",
+                    filePath: AUDIO_BASE_PATH + rawFilename + ".mp3"
+                };
+            }).sort((a, b) => {
+                if (a.category < b.category) return -1;
+                if (a.category > b.category) return 1;
+                if (a.displayName < b.displayName) return -1;
+                if (a.displayName > b.displayName) return 1;
+                return 0;
+            });
+        }
+
+
+        // --- Preference Cookie Management ---
+        function savePreference(prefName, value) {
+            setCookie(prefName, JSON.stringify(value), 365);
+        }
+
+        function getPreference(prefName, defaultValue) {
+            const cookieValue = getCookie(prefName);
+            try {
+                if (cookieValue !== null) return JSON.parse(cookieValue);
+            } catch (e) {
+                console.error(`Error parsing preference ${prefName}:`, e);
+                return defaultValue;
+            }
+            return defaultValue;
+        }
+
+        function panToNode(nodeId) {
+            const node = findNodeById(nodeId);
+            const nodeEl = document.getElementById(nodeId);
+            if (!node || !nodeEl) return;
+            const graphCanvasRect = graphCanvas.getBoundingClientRect();
+            const nodeWidth = nodeEl.offsetWidth;
+            const nodeHeight = nodeEl.offsetHeight;
+
+            panX = graphCanvasRect.width / 2 - (node.x + nodeWidth / 2) * currentZoom;
+            panY = graphCanvasRect.height / 2 - (node.y + nodeHeight / 2) * currentZoom;
+            updateWorldTransform();
+            redrawWires();
         }
 
         // --- Node Management ---
         function createNodeElement(node) {
             const nodeEl = document.createElement('div');
             nodeEl.id = node.id;
-            nodeEl.classList.add('node', `node-${node.type.toLowerCase()}`, 'border'); 
+            nodeEl.classList.add('node', `node-${node.type.toLowerCase()}`, 'border');
             if (node.type === 'Scene') nodeEl.classList.add('node-scene');
-
             nodeEl.style.left = `${node.x}px`;
             nodeEl.style.top = `${node.y}px`;
-            
-            node.zIndex = node.zIndex || highestZIndex++; 
+            node.zIndex = node.zIndex || highestZIndex++;
             nodeEl.style.zIndex = node.zIndex;
 
             const titleEl = document.createElement('div');
@@ -572,142 +917,177 @@
             const contentEl = document.createElement('div');
             contentEl.classList.add('node-content');
             nodeEl.appendChild(contentEl);
-            
-            renderNodeSpecificContent(node, contentEl, nodeEl); 
+            renderNodeSpecificContent(node, contentEl, nodeEl);
+
 
             nodeEl.addEventListener('mousedown', (e) => {
-                if (e.target.classList.contains('node-port') || e.target.closest('input, textarea, select, button')) {
-                    return; 
-                }
+                if (e.target.classList.contains('node-port') || e.target.closest('input, textarea, select, button, .selected-sound-display, .sound-dropdown-list')) return;
                 e.preventDefault();
                 e.stopPropagation();
-                selectNode(node.id); 
+                selectNode(node.id);
                 selectedElement = nodeEl;
-                
                 const graphCanvasRect = graphCanvas.getBoundingClientRect();
                 const worldMouseX = (e.clientX - graphCanvasRect.left - panX) / currentZoom;
                 const worldMouseY = (e.clientY - graphCanvasRect.top - panY) / currentZoom;
-
                 offset.x = worldMouseX - node.x;
                 offset.y = worldMouseY - node.y;
-                
                 nodeEl.style.cursor = 'grabbing';
             });
-            
-            worldContainer.appendChild(nodeEl); 
+            worldContainer.appendChild(nodeEl);
             return nodeEl;
         }
 
         function addPortLabel(portEl, labelText, type) {
             const labelEl = document.createElement('div');
-            const typeClasses = type.split(' ').filter(Boolean); 
-            labelEl.classList.add('port-label', ...typeClasses); 
+            const typeClasses = type.split(' ').filter(Boolean);
+            labelEl.classList.add('port-label', ...typeClasses);
             labelEl.textContent = labelText;
-            labelEl.style.top = portEl.style.top; 
+            labelEl.style.top = portEl.style.top;
             const nodeContent = portEl.closest('.node')?.querySelector('.node-content');
-            if (nodeContent) {
-                 nodeContent.appendChild(labelEl); 
-            } else {
-                console.warn("Could not find node-content to append port label for port on node:", portEl.dataset.nodeId);
-            }
+            if (nodeContent) nodeContent.appendChild(labelEl);
+            else console.warn("Could not find node-content for port label:", portEl.dataset.nodeId);
         }
-        
-        function renderNodeSpecificContent(node, contentEl, nodeEl) {
-            contentEl.innerHTML = ''; 
 
-            const createLabel = (text) => {
-                const label = document.createElement('label');
-                label.textContent = text;
-                return label;
-            };
-            const createInput = (type, value, placeholder, onChange) => {
+
+        const POSE_OPTIONS = ["default", "standing", "sitting", "walking", "running", "happy", "sad", "angry", "surprised", "thinking", "custom"];
+        const EXPRESSION_OPTIONS = ["default", "neutral", "smiling", "frowning", "crying", "blushing", "winking", "scared", "custom"];
+        const OVERLAY_OPTIONS = ["none", "sweat", "tears", "blush_heavy", "glasses", "hat", "custom"];
+        const WEATHER_CONDITION_OPTIONS = ["Clear", "Sunny", "Cloudy", "Partly Cloudy", "Overcast", "Rainy", "Light Rain", "Heavy Rain", "Stormy", "Thunderstorm", "Snowy", "Foggy", "Misty", "Windy"];
+
+        function renderNodeSpecificContent(node, contentEl, nodeEl) {
+            contentEl.innerHTML = ''; // Clear previous content
+
+            const createLabel = (text) => { const l = document.createElement('label'); l.textContent = text; return l; };
+
+            const createInput = (type, value, placeholder, onChange, isReadOnly = false, attributes = {}) => {
                 const input = document.createElement(type === 'textarea' ? 'textarea' : 'input');
                 if (type !== 'textarea') input.type = type;
                 input.value = value || '';
                 if (placeholder) input.placeholder = placeholder;
-                input.addEventListener('input', (e) => {
-                    onChange(e.target.value); 
-                    attemptSaveToCookies(); 
+                if (isReadOnly) input.readOnly = true;
+                else input.addEventListener('input', (e) => {
+                    let val = e.target.value;
+                    if (type === 'number') val = parseFloat(val);
+                    onChange(val);
+                    attemptSaveGraphToCookies();
                 });
                 if (type === 'textarea') input.rows = 3;
+                for (const attr in attributes) {
+                    input.setAttribute(attr, attributes[attr]);
+                }
                 return input;
             };
-             const createSelect = (options, selectedValue, onChange) => {
+
+            const createSelect = (options, selectedValue, onChange, addEmptyOption = false, isSoundSelect = false) => {
                 const select = document.createElement('select');
-                options.forEach(opt => {
-                    const optionEl = document.createElement('option'); 
-                    optionEl.value = typeof opt === 'string' ? opt : opt.value;
-                    optionEl.textContent = typeof opt === 'string' ? opt : opt.text;
-                    if ((typeof opt === 'string' ? opt : opt.value) === selectedValue) {
-                        optionEl.selected = true;
-                    }
-                    select.appendChild(optionEl);
-                });
-                select.addEventListener('change', (e) => {
-                    onChange(e.target.value);
-                    attemptSaveToCookies();
-                });
+                if (addEmptyOption) {
+                    const eo = document.createElement('option');
+                    eo.setAttribute('disabled', 'disabled');
+                    eo.setAttribute('hidden', 'hidden');
+                    eo.value = "";
+                    eo.textContent = isSoundSelect ? "Select Sound..." : `Select...`;
+                    select.appendChild(eo);
+                    if (!selectedValue) eo.selected = true;
+                }
+
+                if (isSoundSelect) {
+                    const categories = {};
+                    options.forEach(opt => {
+                        if (!categories[opt.category]) categories[opt.category] = [];
+                        categories[opt.category].push(opt);
+                    });
+
+                    Object.keys(categories).sort().forEach(categoryName => {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = categoryName;
+                        categories[categoryName].sort((a,b) => a.displayName.localeCompare(b.displayName)).forEach(soundOpt => {
+                            const oel = document.createElement('option');
+                            oel.value = soundOpt.filePath;
+                            oel.textContent = soundOpt.displayName;
+                            if (soundOpt.filePath === selectedValue) oel.selected = true;
+                            optgroup.appendChild(oel);
+                        });
+                        select.appendChild(optgroup);
+                    });
+                } else {
+                    options.forEach(opt => {
+                        const oel = document.createElement('option');
+                        oel.value = typeof opt === 'string' ? opt : opt.value;
+                        oel.textContent = typeof opt === 'string' ? opt : opt.text;
+                        if ((typeof opt === 'string' ? opt : opt.value) === selectedValue) oel.selected = true;
+                        select.appendChild(oel);
+                    });
+                }
+                select.addEventListener('change', (e) => { onChange(e.target.value); attemptSaveGraphToCookies(); });
                 return select;
             };
-            
-            nodeEl.querySelectorAll('.node-port').forEach(p => p.remove()); 
+
+            // Remove existing ports before re-rendering
+            nodeEl.querySelectorAll('.node-port').forEach(p => p.remove());
             contentEl.querySelectorAll('.port-label').forEach(l => l.remove());
 
 
             if (node.type === 'Scene') {
-                const narrativeOutPort = createPort(node.id, 'output', 'narrative-out', 0); 
+                const narrativeOutPort = createPort(node.id, 'output', 'narrative-out', 0);
                 nodeEl.appendChild(narrativeOutPort);
                 addPortLabel(narrativeOutPort, "Narrative Out", "output");
-                updateSceneCharacterPorts(node, nodeEl); 
+                updateSceneCharacterPorts(node, nodeEl);
             } else if (node.type === 'Character') {
                 contentEl.appendChild(createLabel('Name:'));
-                contentEl.appendChild(createInput('text', node.properties.name, 'Character Name', (val) => {
+                const nameInput = createInput('text', node.properties.name, 'Character Name', (val) => {
                     node.properties.name = val;
-                    updateAllCharacterDependentNodes(); 
-                }));
+                    node.properties.replaceKey = generateCharacterReplaceKey(val);
+                    const replaceKeyInputEl = contentEl.querySelector('input[placeholder="Auto-generated Key"]');
+                    if (replaceKeyInputEl) replaceKeyInputEl.value = node.properties.replaceKey;
+                    updateAllCharacterDependentNodes();
+                });
+                contentEl.appendChild(nameInput);
                 contentEl.appendChild(createLabel('Replace Key:'));
-                contentEl.appendChild(createInput('text', node.properties.replaceKey, '_CHARACTER_A', val => node.properties.replaceKey = val));
-                const charOutputPort = createPort(node.id, 'output', 'char-out', 0); 
+                if (!node.properties.replaceKey || node.properties.replaceKey === '_NEW_CHAR') {
+                     node.properties.replaceKey = generateCharacterReplaceKey(node.properties.name);
+                }
+                const replaceKeyInput = createInput('text', node.properties.replaceKey, 'Auto-generated Key', null, true);
+                contentEl.appendChild(replaceKeyInput);
+                const charOutputPort = createPort(node.id, 'output', 'char-out', 0);
                 nodeEl.appendChild(charOutputPort);
-            } else if (node.type === 'Dialogue' || node.type === 'Interact' || node.type === 'Directive') {
+            } else if (['Dialogue', 'Interact', 'Directive'].includes(node.type)) {
                 const generalInputPortCommon = createPort(node.id, 'input', 'general-input', 0);
                 nodeEl.appendChild(generalInputPortCommon);
-                const characters = nodes.filter(n => n.type === 'Character').map(n => ({ value: n.id, text: n.properties.name || n.id }));
+                const characters = nodes.filter(n => n.type === 'Character').map(n => ({ value: n.id, text: n.properties.name || `Char (${n.id.substring(0,4)})` }));
 
                 if (node.type === 'Dialogue') {
                     contentEl.appendChild(createLabel('Character:'));
-                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val));
+                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val, true));
                     contentEl.appendChild(createLabel('Dialogue Text:'));
                     contentEl.appendChild(createInput('textarea', node.properties.text, 'Character says...', val => node.properties.text = val));
                 } else if (node.type === 'Interact') {
                     contentEl.appendChild(createLabel('Character (Prompter):'));
-                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val));
+                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val, true));
                     contentEl.appendChild(createLabel('Prompt Text (use \\ansX or \\monX):'));
                     contentEl.appendChild(createInput('textarea', node.properties.promptText, 'e.g., What is your \\ans10 name?', val => node.properties.promptText = val));
                     contentEl.appendChild(createLabel('Placeholder:'));
                     contentEl.appendChild(createInput('text', node.properties.placeholder, 'e.g., adjective', val => node.properties.placeholder = val));
                 } else { // Directive
                     contentEl.appendChild(createLabel('Character (Actor):'));
-                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val));
+                    contentEl.appendChild(createSelect(characters, node.properties.characterId, val => node.properties.characterId = val, true));
                     contentEl.appendChild(createLabel('Prompt/Situation:'));
                     contentEl.appendChild(createInput('textarea', node.properties.promptText, 'Situation leading to choice', val => node.properties.promptText = val));
                 }
-                
+
+
                 if (node.type === 'Dialogue' || node.type === 'Interact') {
                     const advancedToggle = document.createElement('button');
                     advancedToggle.textContent = contentEl.classList.contains('expanded') ? 'Advanced Options ▲' : 'Advanced Options ▼';
                     advancedToggle.classList.add('text-sm', 'text-blue-600', 'dark:text-blue-400', 'mt-2', 'w-full', 'text-left');
                     const advancedContent = document.createElement('div');
-                    advancedContent.classList.add('expandable-content', 'mt-2', 'border-t', 'pt-2');
+                    advancedContent.classList.add('expandable-content', 'mt-2', 'border-t', 'pt-2', 'dark:border-gray-600');
                     if (contentEl.classList.contains('expanded')) advancedContent.style.maxHeight = '500px';
-
                     advancedContent.appendChild(createLabel('Pose:'));
-                    advancedContent.appendChild(createInput('text', node.properties.pose, 'e.g., happy', val => node.properties.pose = val));
+                    advancedContent.appendChild(createSelect(POSE_OPTIONS, node.properties.pose, val => node.properties.pose = val));
                     advancedContent.appendChild(createLabel('Expression:'));
-                    advancedContent.appendChild(createInput('text', node.properties.expression, 'e.g., smiling', val => node.properties.expression = val));
+                    advancedContent.appendChild(createSelect(EXPRESSION_OPTIONS, node.properties.expression, val => node.properties.expression = val));
                     advancedContent.appendChild(createLabel('Overlays:'));
-                    advancedContent.appendChild(createInput('text', node.properties.overlays, 'e.g., blush', val => node.properties.overlays = val));
-                    
+                    advancedContent.appendChild(createSelect(OVERLAY_OPTIONS, node.properties.overlays, val => node.properties.overlays = val));
                     contentEl.appendChild(advancedToggle);
                     contentEl.appendChild(advancedContent);
                     advancedToggle.onclick = () => {
@@ -715,499 +1095,709 @@
                         advancedToggle.textContent = contentEl.classList.contains('expanded') ? 'Advanced Options ▲' : 'Advanced Options ▼';
                     };
                 }
-                
-                if (node.type !== 'Directive') { 
+
+                if (node.type !== 'Directive') {
                     const generalOutputPortCommon = createPort(node.id, 'output', 'general-output', 0);
                     nodeEl.appendChild(generalOutputPortCommon);
-                } else { 
-                    const decisionsContainer = document.createElement('div'); 
-                    if (!contentEl.contains(decisionsContainer)) contentEl.appendChild(decisionsContainer);
-
-
+                } else {
+                    const decisionsContainer = document.createElement('div');
+                    contentEl.appendChild(decisionsContainer);
                     const renderDecisions = () => {
                         decisionsContainer.innerHTML = '';
                         nodeEl.querySelectorAll('.node-port.output-decision').forEach(p => p.remove());
-                        // No need to remove labels here as they are not created for directive options
-
                         node.properties.options.forEach((opt, index) => {
                             const decisionDiv = document.createElement('div');
-                            decisionDiv.classList.add('border', 'p-2', 'rounded', 'mb-2', 'relative');
+                            decisionDiv.classList.add('border', 'p-2', 'rounded', 'mb-2', 'relative', 'dark:border-gray-600');
                             decisionDiv.appendChild(createLabel(`Option ${index + 1} Summary:`));
                             const summaryInput = createInput('text', opt.summary, 'Summary', val => opt.summary = val);
                             decisionDiv.appendChild(summaryInput);
-                            
                             const removeBtn = document.createElement('button');
                             removeBtn.textContent = 'Remove';
-                            removeBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'text-xs', 'absolute', 'top-1', 'right-1', 'p-1');
+                            removeBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'text-xs', 'absolute', 'top-1', 'right-1', 'p-1', 'rounded');
                             removeBtn.onclick = () => {
                                 node.properties.options.splice(index, 1);
                                 wires = wires.filter(w => !(w.fromNode === node.id && w.fromPort === `option-${opt.id}`));
-                                renderDecisions(); 
-                                redrawWires();
-                                attemptSaveToCookies();
+                                renderDecisions();
+                                updateAllWireColors(); // Update colors on structural change
+                                redrawWires(); attemptSaveGraphToCookies();
                             };
                             decisionDiv.appendChild(removeBtn);
                             decisionsContainer.appendChild(decisionDiv);
-
                             const portId = `option-${opt.id}`;
-                            const optionPort = createPort(node.id, 'output-decision', portId, 0); // Index 0 as top is custom
-                            
-                            requestAnimationFrame(() => { 
-                                let portTop = PORT_BASE_TOP_OFFSET + index * (PORT_SPACING + 20); // Default
+                            const optionPort = createPort(node.id, 'output-decision', portId, 0);
+                            requestAnimationFrame(() => { // Ensure elements are in DOM for offset calculations
                                 if (summaryInput.offsetParent && decisionDiv.offsetParent) {
-                                     portTop = decisionDiv.offsetTop + summaryInput.offsetTop + (summaryInput.offsetHeight / 2) - (optionPort.offsetHeight / 2);
+                                     optionPort.style.top = `${decisionDiv.offsetTop + summaryInput.offsetTop + (summaryInput.offsetHeight / 2) - (optionPort.offsetHeight / 2)}px`;
+                                } else { // Fallback if not in DOM (e.g., during initial load of complex node)
+                                    optionPort.style.top = `${PORT_BASE_TOP_OFFSET + index * (PORT_SPACING + (summaryInput.offsetHeight || 20) + 16)}px`;
                                 }
-                                optionPort.style.top = `${portTop}px`;
                             });
                             nodeEl.appendChild(optionPort);
                         });
                     };
-
                     const addDecisionBtn = document.createElement('button');
                     addDecisionBtn.textContent = 'Add Decision';
-                    addDecisionBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'w-full', 'mt-2');
+                    addDecisionBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'w-full', 'mt-2', 'rounded');
                     addDecisionBtn.onclick = () => {
-                        const newOptionId = generateId();
-                        node.properties.options.push({ id: newOptionId, summary: ''}); 
-                        renderDecisions(); 
-                        attemptSaveToCookies();
+                        node.properties.options.push({ id: generateId(), summary: ''});
+                        renderDecisions();
+                        updateAllWireColors(); // Update colors on structural change
+                        redrawWires();
+                        attemptSaveGraphToCookies();
                     };
-                    contentEl.appendChild(addDecisionBtn); 
+                    contentEl.appendChild(addDecisionBtn);
                     renderDecisions();
                 }
-
-
             } else if (node.type === 'Weather' || node.type === 'Time') {
                 const generalInputPortWT = createPort(node.id, 'input', 'general-input', 0);
                 nodeEl.appendChild(generalInputPortWT);
-
-                contentEl.appendChild(createLabel(node.type === 'Weather' ? 'Condition:' : 'Time (HH:00):'));
-                contentEl.appendChild(createInput('text', 
-                    node.type === 'Weather' ? node.properties.condition : node.properties.time, 
-                    node.type === 'Weather' ? 'e.g., Clear, Rainy' : 'e.g., 08:00, 17:00', 
-                    val => {
-                        if (node.type === 'Weather') node.properties.condition = val;
-                        else node.properties.time = val;
-                    }
-                ));
+                if (node.type === 'Weather') {
+                    contentEl.appendChild(createLabel('Condition:'));
+                    contentEl.appendChild(createSelect(WEATHER_CONDITION_OPTIONS, node.properties.condition, val => node.properties.condition = val));
+                } else { // Time
+                    contentEl.appendChild(createLabel('Time (HH:MM AM/PM):'));
+                    contentEl.appendChild(createInput('text', node.properties.time, 'e.g., 08:00 AM', val => node.properties.time = val));
+                }
                 const generalOutputPortWT = createPort(node.id, 'output', 'general-output', 0);
                 nodeEl.appendChild(generalOutputPortWT);
+            } else if (node.type === 'Sound') {
+                const generalInputPortSound = createPort(node.id, 'input', 'general-input', 0);
+                nodeEl.appendChild(generalInputPortSound);
+
+                const soundUiContainer = document.createElement('div');
+                soundUiContainer.classList.add('sound-node-ui');
+
+                const selectedSoundDisplay = document.createElement('div');
+                selectedSoundDisplay.classList.add('selected-sound-display');
+                const selectedSoundNameSpan = document.createElement('span');
+                selectedSoundNameSpan.classList.add('selected-sound-name');
+                selectedSoundNameSpan.textContent = node.properties.selectedSoundDisplayName || 'Select Sound...';
+                const dropdownArrowSpan = document.createElement('span');
+                dropdownArrowSpan.classList.add('dropdown-arrow-symbol');
+                dropdownArrowSpan.innerHTML = '&#9660;'; // Down arrow
+
+                selectedSoundDisplay.appendChild(selectedSoundNameSpan);
+                selectedSoundDisplay.appendChild(dropdownArrowSpan);
+                soundUiContainer.appendChild(selectedSoundDisplay);
+
+                const soundDropdownList = document.createElement('div');
+                soundDropdownList.classList.add('sound-dropdown-list', 'hidden');
+
+                const soundSearchInput = createInput('text', node.properties.soundSearchTerm || '', 'Search sounds...', (val) => {
+                    node.properties.soundSearchTerm = val;
+                    populateCustomSoundList(soundDropdownList.querySelector('.sound-list-scroll-container'), selectedSoundNameSpan, dropdownArrowSpan, node, val);
+                    if (val && soundDropdownList.classList.contains('hidden')) { // Open if searching and closed
+                        soundDropdownList.classList.remove('hidden');
+                        selectedSoundDisplay.classList.add('open');
+                        dropdownArrowSpan.innerHTML = '&#9650;'; // Up arrow
+                    }
+                     attemptSaveGraphToCookies();
+                });
+                soundSearchInput.classList.add('sound-search-input-node');
+                soundSearchInput.addEventListener('click', (e) => e.stopPropagation()); // Prevent dropdown close
+                soundDropdownList.appendChild(soundSearchInput);
+
+                const soundListScrollContainer = document.createElement('div');
+                soundListScrollContainer.classList.add('sound-list-scroll-container');
+                soundDropdownList.appendChild(soundListScrollContainer);
+
+                soundUiContainer.appendChild(soundDropdownList);
+                contentEl.appendChild(soundUiContainer);
+
+                const playBtn = document.createElement('button');
+                playBtn.classList.add('node-sound-play-btn');
+                playBtn.innerHTML = `<svg viewBox="0 0 20 20"><path d="M12.92,1.3S12.29.62,11.66,0c-.5.05-1.05.39-1.05.39a10.2,10.2,0,0,0-1,1.83A10.14,10.14,0,0,0,9.24,4.91L8.1,6.42S8,6.54,8,6.68a.3.3,0,0,0,.35.28H8.7l3.81-2.15S13,4.51,13,4.21a.69.69,0,0,0-.13-.42Z"/><path d="M8.1,13.58,9.24,15.09a10.14,10.14,0,0,0,.39,2.69,10.2,10.2,0,0,0,1,1.83s.51.33,1.05.39c.63-.62.63-.62,0-1.3S11.15,16,11.15,16l-1.11-.93a15.5,15.5,0,0,1-.9-1.15Z"/><path d="M15.2,10.5a6.12,6.12,0,0,1-1.08,3.53,1,1,0,0,1-1.41.13,1,1,0,0,1-.13-1.41,4.11,4.11,0,0,0,.72-2.38,4.11,4.11,0,0,0-.72-2.38,1,1,0,0,1,.13-1.41,1,1,0,0,1,1.41.13A6.12,6.12,0,0,1,15.2,10.5Z"/><path d="M17.7,10.5a9.16,9.16,0,0,1-1.84,5.53,1,1,0,0,1-1.41-.05,1,1,0,0,1,.05-1.41A7.15,7.15,0,0,0,15.75,10.5a7.15,7.15,0,0,0-1.25-4.06,1,1,0,0,1-.05-1.41,1,1,0,0,1,1.41-.05A9.16,9.16,0,0,1,17.7,10.5Z"/><path d="M0,7.5v6H3.84L9,18.11V2.89L3.84,7.5Z"/></svg>`;
+                playBtn.title = "Play Sound";
+                playBtn.addEventListener('click', () => {
+                    if (node.properties.selectedSoundPath) {
+                        try {
+                            const audio = new Audio(node.properties.selectedSoundPath);
+                            audio.play().catch(e => {
+                                console.error("Error playing audio:", e);
+                                showToast("Could not play audio. Check console.");
+                            });
+                        } catch (e) {
+                             console.error("Error creating audio element:", e);
+                             showToast("Error with audio file path.");
+                        }
+                    } else {
+                        showToast("No sound selected.");
+                    }
+                });
+                contentEl.appendChild(playBtn);
+
+                selectedSoundDisplay.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent click from bubbling to document
+                    const isHidden = soundDropdownList.classList.toggle('hidden');
+                    selectedSoundDisplay.classList.toggle('open', !isHidden);
+                    dropdownArrowSpan.innerHTML = isHidden ? '&#9660;' : '&#9650;';
+                    if (!isHidden) { // If opened
+                        populateCustomSoundList(soundListScrollContainer, selectedSoundNameSpan, dropdownArrowSpan, node, soundSearchInput.value || '');
+                        soundSearchInput.focus();
+                    }
+                });
+
+                const generalOutputPortSound = createPort(node.id, 'output', 'general-output', 0);
+                nodeEl.appendChild(generalOutputPortSound);
+            } else if (node.type === 'Delay') {
+                const generalInputPortDelay = createPort(node.id, 'input', 'general-input', 0);
+                nodeEl.appendChild(generalInputPortDelay);
+
+                contentEl.appendChild(createLabel('Delay (seconds):'));
+                const delayInput = createInput('number', node.properties.delaySeconds, 'e.g., 1.5',
+                    (val) => { node.properties.delaySeconds = Math.max(0.01, parseFloat(val) || 0); },
+                    false,
+                    { min: "0.00", step: "1.00" }
+                );
+                contentEl.appendChild(delayInput);
+
+                const generalOutputPortDelay = createPort(node.id, 'output', 'general-output', 0);
+                nodeEl.appendChild(generalOutputPortDelay);
+
+            } else if (node.type === 'Terminate') {
+                const generalInputPortTerminate = createPort(node.id, 'input', 'general-input', 0);
+                nodeEl.appendChild(generalInputPortTerminate);
+                const terminateText = document.createElement('p');
+                terminateText.textContent = "Path Terminated";
+                terminateText.classList.add('text-center', 'text-gray-500', 'dark:text-gray-400', 'py-2');
+                contentEl.appendChild(terminateText);
             }
         }
 
+
+        function populateCustomSoundList(scrollContainer, selectedNameElement, dropdownArrowElement, node, searchTerm) {
+            scrollContainer.innerHTML = ''; // Clear previous items
+            const lowerSearchTerm = (searchTerm || '').toLowerCase();
+            const currentSelectedPath = node.properties.selectedSoundPath;
+            const soundDropdownList = scrollContainer.parentElement; // The main dropdown list element
+
+            if (!searchTerm) { // If no search term, show categorized list
+                const categories = {};
+                PROCESSED_SOUND_LIST.forEach(sound => {
+                    if (!categories[sound.category]) {
+                        categories[sound.category] = [];
+                    }
+                    categories[sound.category].push(sound);
+                });
+
+                Object.keys(categories).sort().forEach(categoryName => {
+                    const categoryContainer = document.createElement('div');
+                    categoryContainer.classList.add('sound-category');
+
+                    const categoryHeader = document.createElement('div');
+                    categoryHeader.classList.add('category-header');
+                    const categoryArrow = document.createElement('span');
+                    categoryArrow.classList.add('category-arrow-symbol');
+                    categoryArrow.innerHTML = '&#9654;'; // Right arrow (collapsed)
+                    const categoryNameSpan = document.createElement('span');
+                    categoryNameSpan.textContent = categoryName;
+                    categoryHeader.appendChild(categoryArrow);
+                    categoryHeader.appendChild(categoryNameSpan);
+
+                    const soundsContainer = document.createElement('div');
+                    soundsContainer.classList.add('category-sounds', 'hidden'); // Initially hidden
+
+                    categories[categoryName].sort((a, b) => a.displayName.localeCompare(b.displayName)).forEach(sound => {
+                        const soundItem = document.createElement('div');
+                        soundItem.classList.add('sound-item');
+                        soundItem.textContent = sound.displayName;
+                        soundItem.dataset.filePath = sound.filePath;
+                        soundItem.dataset.displayName = sound.displayName;
+
+                        if (sound.filePath === currentSelectedPath) {
+                            soundItem.classList.add('selected');
+                        }
+
+                        soundItem.addEventListener('click', (e) => {
+                            e.stopPropagation(); // Prevent dropdown close
+                            node.properties.selectedSoundPath = sound.filePath;
+                            node.properties.selectedSoundDisplayName = sound.displayName;
+                            selectedNameElement.textContent = sound.displayName;
+                            if (soundDropdownList) soundDropdownList.classList.add('hidden');
+                            dropdownArrowElement.parentElement.classList.remove('open'); // Update main dropdown arrow
+                            dropdownArrowElement.innerHTML = '&#9660;';
+                            attemptSaveGraphToCookies();
+                            // Update selection visual
+                            const currentlySelected = scrollContainer.querySelector('.sound-item.selected');
+                            if (currentlySelected) currentlySelected.classList.remove('selected');
+                            soundItem.classList.add('selected');
+                        });
+                        soundsContainer.appendChild(soundItem);
+                    });
+
+                    categoryHeader.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Prevent main dropdown close
+                        soundsContainer.classList.toggle('hidden');
+                        categoryHeader.classList.toggle('expanded');
+                        categoryArrow.innerHTML = soundsContainer.classList.contains('hidden') ? '&#9654;' : '&#9660;';
+                    });
+
+                    categoryContainer.appendChild(categoryHeader);
+                    categoryContainer.appendChild(soundsContainer);
+                    scrollContainer.appendChild(categoryContainer);
+                });
+                if (Object.keys(categories).length === 0 && PROCESSED_SOUND_LIST.length > 0) {
+                     const noResultsItem = document.createElement('div');
+                    noResultsItem.classList.add('sound-item');
+                    noResultsItem.textContent = 'No sounds available in categories.';
+                    scrollContainer.appendChild(noResultsItem);
+                } else if (PROCESSED_SOUND_LIST.length === 0) {
+                    const noResultsItem = document.createElement('div');
+                    noResultsItem.classList.add('sound-item');
+                    noResultsItem.textContent = 'No sounds loaded.';
+                    scrollContainer.appendChild(noResultsItem);
+                }
+
+
+            } else { // If search term exists, show flat filtered list
+                const filteredSounds = PROCESSED_SOUND_LIST.filter(sound =>
+                    sound.displayName.toLowerCase().includes(lowerSearchTerm) ||
+                    sound.category.toLowerCase().includes(lowerSearchTerm)
+                ).sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+                filteredSounds.forEach(sound => {
+                    const soundItem = document.createElement('div');
+                    soundItem.classList.add('sound-item');
+                    soundItem.textContent = sound.displayName;
+                    soundItem.dataset.filePath = sound.filePath;
+                    soundItem.dataset.displayName = sound.displayName;
+
+                    if (sound.filePath === currentSelectedPath) {
+                        soundItem.classList.add('selected');
+                    }
+
+                    soundItem.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        node.properties.selectedSoundPath = sound.filePath;
+                        node.properties.selectedSoundDisplayName = sound.displayName;
+                        selectedNameElement.textContent = sound.displayName;
+                        if (soundDropdownList) soundDropdownList.classList.add('hidden');
+                        dropdownArrowElement.parentElement.classList.remove('open');
+                        dropdownArrowElement.innerHTML = '&#9660;';
+                        attemptSaveGraphToCookies();
+                        const currentlySelected = scrollContainer.querySelector('.sound-item.selected');
+                        if (currentlySelected) currentlySelected.classList.remove('selected');
+                        soundItem.classList.add('selected');
+                    });
+                    scrollContainer.appendChild(soundItem);
+                });
+                 if (filteredSounds.length === 0) {
+                    const noResultsItem = document.createElement('div');
+                    noResultsItem.classList.add('sound-item');
+                    noResultsItem.textContent = 'No sounds match your search.';
+                    noResultsItem.style.cursor = 'default';
+                    noResultsItem.style.opacity = '0.7';
+                    scrollContainer.appendChild(noResultsItem);
+                }
+            }
+        }
+
+
         function updateSceneCharacterPorts(sceneNode, sceneNodeEl) {
+            // Remove existing character input ports and labels
             sceneNodeEl.querySelectorAll('.node-port.input[data-port-type="character-input"]').forEach(p => p.remove());
             const contentEl = sceneNodeEl.querySelector('.node-content');
-            if (contentEl) {
-                 contentEl.querySelectorAll('.port-label.input.character-input-label').forEach(l => l.remove());
-            }
+            if (contentEl) contentEl.querySelectorAll('.port-label.input.character-input-label').forEach(l => l.remove());
 
+            // Count connected character wires
             const connectedCharWires = wires.filter(w => w.toNode === sceneNode.id && w.toPort.startsWith('char-in-'));
             const numChars = connectedCharWires.length;
-            let charPortIndex = 0; 
 
+            // Add ports: one for each connected char + one extra for a new connection
             for (let i = 0; i < numChars + 1; i++) {
                 const portId = `char-in-${i}`;
-                const port = createPort(sceneNode.id, 'input', portId, charPortIndex++, 'character-input'); 
+                const port = createPort(sceneNode.id, 'input', portId, i, 'character-input');
                 sceneNodeEl.appendChild(port);
-                addPortLabel(port, `Char In ${i+1}`, "input character-input-label"); 
-            }
-            const minHeightBase = 60; 
-            const sceneContentEl = sceneNodeEl.querySelector('.node-content');
-            if(sceneContentEl) {
-                 sceneNodeEl.style.minHeight = `${minHeightBase + (numChars + 1) * PORT_SPACING + PORT_BASE_TOP_OFFSET}px`;
+                addPortLabel(port, `Char In ${i+1}`, "input character-input-label");
             }
 
-            updateAllCharacterDependentNodes(); 
+            // Adjust scene node height if necessary (simple heuristic)
+            const sceneContentEl = sceneNodeEl.querySelector('.node-content');
+            if(sceneContentEl) sceneNodeEl.style.minHeight = `${60 + (numChars + 1) * PORT_SPACING + PORT_BASE_TOP_OFFSET}px`;
+
+            updateAllCharacterDependentNodes(); // Refresh nodes that depend on character lists
         }
 
         function createPort(nodeId, type, portId, index, portType = 'general') {
             const port = document.createElement('div');
             port.classList.add('node-port', type);
-            if (type === 'output-decision') port.classList.add('output');
-            port.dataset.nodeId = nodeId;
-            port.dataset.portId = portId;
-            port.dataset.portType = portType; 
-            
-            if (type !== 'output-decision' || portType === 'general') { 
+            if (type === 'output-decision') port.classList.add('output'); // Ensure 'output' class for styling
+            port.dataset.nodeId = nodeId; port.dataset.portId = portId; port.dataset.portType = portType;
+
+            // Position port vertically, except for directive decision outputs which are positioned in renderNodeSpecificContent
+            if (type !== 'output-decision' || portType === 'general') { // General output ports still use indexed positioning
                  port.style.top = `${PORT_BASE_TOP_OFFSET + index * PORT_SPACING}px`;
             }
 
 
             port.addEventListener('mousedown', (e) => {
-                e.stopPropagation(); 
-                isWiring = true;
-                startPort = port;
+                e.stopPropagation(); // Prevent node dragging
+                isWiring = true; startPort = port;
                 tempWire = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                tempWire.classList.add('temp-wire');
-                wiresSvg.appendChild(tempWire); 
+                tempWire.classList.add('temp-wire'); wiresSvg.appendChild(tempWire);
                 document.body.style.cursor = 'crosshair';
             });
-            port.addEventListener('mouseup', (e) => {
-                if (isWiring && startPort && startPort !== port) {
-                    const fromNodeId = startPort.dataset.nodeId;
-                    const fromPortId = startPort.dataset.portId;
-                    const toNodeId = port.dataset.nodeId;
-                    const toPortId = port.dataset.portId;
 
-                    const startNode = findNodeById(fromNodeId);
-                    const endNode = findNodeById(toNodeId);
+
+            port.addEventListener('mouseup', (e) => {
+                if (isWiring && startPort && startPort !== port) { // Ensure wiring is active and not clicking the same port
+                    const fromNodeId = startPort.dataset.nodeId, fromPortId = startPort.dataset.portId;
+                    const toNodeId = port.dataset.nodeId, toPortId = port.dataset.portId;
+                    const startNode = findNodeById(fromNodeId), endNode = findNodeById(toNodeId);
                     const startPortClassType = startPort.classList.contains('input') ? 'input' : 'output';
                     const endPortClassType = port.classList.contains('input') ? 'input' : 'output';
 
-                    let canConnect = true;
-                    if (!startNode || !endNode || fromNodeId === toNodeId || startPortClassType === endPortClassType) {
-                        canConnect = false;
-                    } else if (endNode.type === 'Scene') { 
-                        if (startNode.type === 'Character' && port.dataset.portType === 'character-input') {
-                            // Allow Character -> Scene (Char In X)
-                        } else {
-                            canConnect = false;
-                        }
-                    } else if (startNode.type === 'Scene') { 
-                        if (fromPortId === 'narrative-out' && port.dataset.portId === 'general-input') { 
-                            // Allow Scene (Narrative Out) -> Other Node (General In)
-                        } else {
-                            canConnect = false; 
-                        }
-                    } else if (startNode.type === 'Character') {
-                        if(endNode.type !== 'Scene' || port.dataset.portType !== 'character-input') {
-                            canConnect = false;
-                        }
-                    }
-                    // Weather and Time now behave like general nodes with input/output, handled by default
+                    let canConnect = true; // Assume connection is possible
+                    // Basic validation: no self-connection, no input-to-input or output-to-output
+                    if (!startNode || !endNode || fromNodeId === toNodeId || startPortClassType === endPortClassType) canConnect = false;
+                    // Scene node specific logic
+                    else if (endNode.type === 'Scene' && (startNode.type !== 'Character' || port.dataset.portType !== 'character-input')) canConnect = false;
+                    else if (startNode.type === 'Scene' && (fromPortId !== 'narrative-out' || port.dataset.portId !== 'general-input')) canConnect = false;
+                    // Character node specific logic
+                    else if (startNode.type === 'Character' && (endNode.type !== 'Scene' || port.dataset.portType !== 'character-input')) canConnect = false;
+                    // Terminate node specific logic
+                    else if (endNode.type === 'Terminate' && startPortClassType === 'input') canConnect = false; // Cannot wire *to* a Terminate node's input from another input
+                    else if (startNode.type === 'Terminate') canConnect = false; // Cannot wire *from* a Terminate node at all
 
 
                     if (canConnect) {
-                        const existingWireToPort = wires.find(w => w.toNode === toNodeId && w.toPort === toPortId);
-                        if (existingWireToPort && endPortClassType === 'input') {
-                            wires = wires.filter(w => w.id !== existingWireToPort.id);
-                        }
-                        // Enforce single outgoing wire for Scene's narrative-out and Character's char-out
-                        if ((startNode.type === 'Scene' && fromPortId === 'narrative-out') || 
-                            (startNode.type === 'Character' && fromPortId === 'char-out')) {
-                            const existingOutgoingWire = wires.find(w => w.fromNode === fromNodeId && w.fromPort === fromPortId);
-                            if (existingOutgoingWire) {
-                                wires = wires.filter(w => w.id !== existingOutgoingWire.id);
-                            }
+                        // Remove existing wire if target is an input port (inputs only allow one connection)
+                        if (endPortClassType === 'input') wires = wires.filter(w => !(w.toNode === toNodeId && w.toPort === toPortId));
+                        // Remove existing wire if source is a Scene narrative-out or Character char-out (single output)
+                        if ((startNode.type === 'Scene' && fromPortId === 'narrative-out') || (startNode.type === 'Character' && fromPortId === 'char-out')) {
+                            wires = wires.filter(w => !(w.fromNode === fromNodeId && w.fromPort === fromPortId));
                         }
 
-
-                        const newWire = {
-                            id: generateId(),
-                            fromNode: fromNodeId,
-                            fromPort: fromPortId,
-                            toNode: toNodeId,
-                            toPort: toPortId,
-                            color: wireColors[nextWireColorIndex % wireColors.length]
-                        };
+                        // Create new wire object (color will be set by updateAllWireColors)
+                        const newWire = { id: generateId(), fromNode: fromNodeId, fromPort: fromPortId, toNode: toNodeId, toPort: toPortId };
                         wires.push(newWire);
-                        nextWireColorIndex++;
-                        redrawWires();
-                        attemptSaveToCookies();
+                        updateAllWireColors(); // Recalculate all wire colors
+                        redrawWires(); attemptSaveGraphToCookies();
 
+                        // If connecting a Character to a Scene, update the Scene's character input ports
                         if (endNode.type === 'Scene' && startNode.type === 'Character') {
                             updateSceneCharacterPorts(endNode, document.getElementById(endNode.id));
                         }
                     }
                 }
-                stopWiring();
+                stopWiring(); // Always stop wiring on mouseup
             });
-            port.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const pNodeId = port.dataset.nodeId;
-                const pPortId = port.dataset.portId;
-                
-                const initialWireCount = wires.length;
-                wires = wires.filter(w => 
-                    !( (w.fromNode === pNodeId && w.fromPort === pPortId) ||
-                       (w.toNode === pNodeId && w.toPort === pPortId) )
-                );
 
-                if (wires.length < initialWireCount) { 
+
+            port.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const pNodeId = port.dataset.nodeId, pPortId = port.dataset.portId;
+                const initialWireCount = wires.length;
+                // Remove all wires connected to this port
+                wires = wires.filter(w => !((w.fromNode === pNodeId && w.fromPort === pPortId) || (w.toNode === pNodeId && w.toPort === pPortId)));
+                if (wires.length < initialWireCount) { // If wires were actually removed
                     const sceneNode = findNodeById(pNodeId);
                     if (sceneNode && sceneNode.type === 'Scene' && port.dataset.portType === 'character-input') {
-                        updateSceneCharacterPorts(sceneNode, document.getElementById(pNodeId));
+                        updateSceneCharacterPorts(sceneNode, document.getElementById(pNodeId)); // Update Scene if a char input was affected
                     }
-                    redrawWires();
-                    attemptSaveToCookies();
+                    updateAllWireColors(); // Recalculate all wire colors
+                    redrawWires(); attemptSaveGraphToCookies();
                 }
             });
             return port;
         }
-        
-        function addNodeToGraph(type, x, y, properties = {}) { 
-            const baseProps = {
-                Scene: { title: 'Scene' },
-                Character: { title: 'Character', name: 'New Character', replaceKey: '_NEW_CHAR' },
-                Dialogue: { title: 'Dialogue', characterId: null, text: '', pose: '', expression: '', overlays: '' },
-                Interact: { title: 'Interact', characterId: null, promptText: '', placeholder: '', pose: '', expression: '', overlays: '' }, 
-                Directive: { title: 'Directive', characterId: null, promptText: '', options: [] },
-                Weather: { title: 'Weather', condition: 'Clear' },
-                Time: { title: 'Time', time: '12:00' }
-            };
 
-            const newNode = {
-                id: generateId(),
-                type: type,
-                x: x, 
-                y: y,
-                properties: { ...baseProps[type], ...properties },
-                zIndex: highestZIndex++ 
+        function addNodeToGraph(type, x, y, properties = {}) {
+            // Default properties for each node type
+            const baseProps = {
+                Scene: { title: 'Scene' }, Character: { title: 'Character', name: 'New Character', replaceKey: generateCharacterReplaceKey('New Character') },
+                Dialogue: { title: 'Dialogue', characterId: null, text: '', pose: POSE_OPTIONS[0], expression: EXPRESSION_OPTIONS[0], overlays: OVERLAY_OPTIONS[0] },
+                Interact: { title: 'Interact', characterId: null, promptText: '', placeholder: '', pose: POSE_OPTIONS[0], expression: EXPRESSION_OPTIONS[0], overlays: OVERLAY_OPTIONS[0] },
+                Directive: { title: 'Directive', characterId: null, promptText: '', options: [] }, Weather: { title: 'Weather', condition: WEATHER_CONDITION_OPTIONS[0] },
+                Time: { title: 'Time', time: '12:00 PM' },
+                Sound: { title: 'Sound', selectedSoundPath: null, selectedSoundDisplayName: null, soundSearchTerm: ''},
+                Delay: { title: 'Delay', delaySeconds: 1.0 },
+                Terminate: { title: 'Terminate Path' }
             };
-            nodes.push(newNode);
-            const nodeEl = createNodeElement(newNode); 
-            if (type === 'Character') {
-                updateAllCharacterDependentNodes();
+            const newNode = { id: generateId(), type: type, x: x, y: y, properties: { ...baseProps[type], ...properties }, zIndex: highestZIndex++ };
+            if (type === 'Character') { // Ensure replaceKey is generated for new characters
+                newNode.properties.replaceKey = generateCharacterReplaceKey(newNode.properties.name);
             }
-            attemptSaveToCookies();
-            return newNode;
+            nodes.push(newNode); createNodeElement(newNode);
+            if (type === 'Character') updateAllCharacterDependentNodes(); // Update nodes if a character was added
+            updateAllWireColors(); // Recalculate wire colors as graph structure changed
+            redrawWires(); // Redraw to apply new colors if any wires were affected implicitly
+            attemptSaveGraphToCookies(); return newNode;
         }
 
         function selectNode(nodeId) {
-            if (selectedNodeId && selectedNodeId !== nodeId) {
+            if (selectedNodeId && selectedNodeId !== nodeId) { // Deselect previous
                 document.getElementById(selectedNodeId)?.classList.remove('selected');
             }
-            if (nodeId) {
+            if (nodeId) { // Select new
                 const nodeEl = document.getElementById(nodeId);
                 if (nodeEl) {
                     nodeEl.classList.add('selected');
                     const node = findNodeById(nodeId);
-                    if (node) {
-                        node.zIndex = highestZIndex++;
-                        nodeEl.style.zIndex = node.zIndex;
-                    }
+                    if (node) { node.zIndex = highestZIndex++; nodeEl.style.zIndex = node.zIndex; } // Bring to front
                 }
                 selectedNodeId = nodeId;
-            } else {
-                selectedNodeId = null;
-            }
+            } else selectedNodeId = null; // Deselect all
         }
 
         function deleteSelectedNode() {
             if (!selectedNodeId) return;
             const nodeToRemove = findNodeById(selectedNodeId);
-            const nodeEl = document.getElementById(selectedNodeId);
-            if (nodeEl) nodeEl.remove();
-            
-            nodes = nodes.filter(n => n.id !== selectedNodeId);
-            wires = wires.filter(w => w.fromNode !== selectedNodeId && w.toNode !== selectedNodeId);
-            
-            if (nodeToRemove) {
-                if (nodeToRemove.type === 'Character') {
-                    nodes.filter(n => n.type === 'Scene').forEach(sceneNode => {
-                        const sceneEl = document.getElementById(sceneNode.id);
-                        if (sceneEl) updateSceneCharacterPorts(sceneNode, sceneEl);
-                    });
-                    updateAllCharacterDependentNodes(); 
-                }
+            document.getElementById(selectedNodeId)?.remove(); // Remove from DOM
+            nodes = nodes.filter(n => n.id !== selectedNodeId); // Remove from nodes array
+            wires = wires.filter(w => w.fromNode !== selectedNodeId && w.toNode !== selectedNodeId); // Remove connected wires
+            if (nodeToRemove && nodeToRemove.type === 'Character') { // If a character node was deleted
+                nodes.filter(n => n.type === 'Scene').forEach(sceneNode => { // Update all scene nodes
+                    const sceneEl = document.getElementById(sceneNode.id);
+                    if (sceneEl) updateSceneCharacterPorts(sceneNode, sceneEl);
+                });
+                updateAllCharacterDependentNodes(); // Update other dependent nodes
             }
+            updateAllWireColors(); // Recalculate all wire colors
+            redrawWires(); selectedNodeId = null; attemptSaveGraphToCookies();
+        }
 
-            redrawWires();
-            selectedNodeId = null;
-            attemptSaveToCookies();
-        }
-        
-        function findNodeById(id) {
-            return nodes.find(n => n.id === id);
-        }
+        function findNodeById(id) { return nodes.find(n => n.id === id); }
 
         function updateAllCharacterDependentNodes() {
+            // Re-render content of nodes that might display character names (Dialogue, Interact, Directive)
             nodes.forEach(node => {
-                if (['Dialogue', 'Interact', 'Directive'].includes(node.type)) { 
+                if (['Dialogue', 'Interact', 'Directive'].includes(node.type)) {
                     const nodeEl = document.getElementById(node.id);
                     const contentEl = nodeEl?.querySelector('.node-content');
                     if (nodeEl && contentEl) {
-                        const isExpanded = contentEl.classList.contains('expanded');
+                        const isExpanded = contentEl.classList.contains('expanded'); // Preserve expanded state
                         renderNodeSpecificContent(node, contentEl, nodeEl);
-                        if (isExpanded && (node.type === 'Dialogue' || node.type === 'Interact')) { 
+                        if (isExpanded && (node.type === 'Dialogue' || node.type === 'Interact')) {
                              contentEl.classList.add('expanded');
+                             const advToggle = contentEl.querySelector('button.text-blue-600');
+                             if (advToggle) advToggle.textContent = 'Advanced Options ▲';
                         }
                     }
                 }
             });
         }
 
+        // --- NEW/MODIFIED Wire Coloring Logic ---
+        function getNewPathColor() {
+            const color = wireColors[globalColorPickerIndex % wireColors.length];
+            globalColorPickerIndex++;
+            return color;
+        }
 
-        // --- Wiring Management ---
-        function redrawWires() {
-            wiresSvg.innerHTML = ''; 
-            const graphCanvasRect = graphCanvas.getBoundingClientRect(); 
-            
+        function _traceAndColorRecursive(nodeId, currentColor, processedWiresThisSession, visitedNodesThisTrace) {
+            if (visitedNodesThisTrace.has(nodeId)) {
+                return; // Cycle detected for this specific trace, stop to prevent infinite loop
+            }
+            visitedNodesThisTrace.add(nodeId);
+
+            const node = findNodeById(nodeId);
+            if (!node) return;
+
+            const outgoingPathsToTrace = []; // Stores objects: { nextNodeId, colorForNextSegment }
+
+            if (node.type === 'Scene') {
+                const wireOut = wires.find(w => w.fromNode === nodeId && w.fromPort === 'narrative-out');
+                if (wireOut && !processedWiresThisSession.has(wireOut.id)) {
+                    wireCalculatedColors.set(wireOut.id, currentColor);
+                    processedWiresThisSession.add(wireOut.id);
+                    outgoingPathsToTrace.push({ nextNodeId: wireOut.toNode, colorForNextSegment: currentColor });
+                }
+            } else if (node.type === 'Directive') {
+                node.properties.options.forEach(opt => {
+                    const optionWire = wires.find(w => w.fromNode === nodeId && w.fromPort === `option-${opt.id}`);
+                    if (optionWire && !processedWiresThisSession.has(optionWire.id)) {
+                        const branchColor = getNewPathColor(); // Each directive option starts a new color
+                        wireCalculatedColors.set(optionWire.id, branchColor);
+                        processedWiresThisSession.add(optionWire.id);
+                        outgoingPathsToTrace.push({ nextNodeId: optionWire.toNode, colorForNextSegment: branchColor });
+                    }
+                });
+            } else if (['Dialogue', 'Interact', 'Weather', 'Time', 'Sound', 'Delay'].includes(node.type)) {
+                // For other nodes with a single 'general-output'
+                const wireOut = wires.find(w => w.fromNode === nodeId && w.fromPort === 'general-output');
+                if (wireOut && !processedWiresThisSession.has(wireOut.id)) {
+                    wireCalculatedColors.set(wireOut.id, currentColor);
+                    processedWiresThisSession.add(wireOut.id);
+                    outgoingPathsToTrace.push({ nextNodeId: wireOut.toNode, colorForNextSegment: currentColor });
+                }
+            }
+            // Character and Terminate nodes do not propagate colors further in this logic
+
+            // Recursively trace for all identified outgoing paths
+            outgoingPathsToTrace.forEach(path => {
+                _traceAndColorRecursive(path.nextNodeId, path.colorForNextSegment, processedWiresThisSession, new Set(visitedNodesThisTrace));
+            });
+        }
+
+        function updateAllWireColors() {
+            wireCalculatedColors.clear();
+            globalColorPickerIndex = 0; // Reset color picker for each full recalculation
+            const processedWiresInTotal = new Set(); // Track wires processed in this entire session to avoid re-processing
+
+            // Start tracing from all Scene nodes, as they are primary path initiators
+            nodes.filter(n => n.type === 'Scene').forEach(sceneNode => {
+                 // Check if the first wire from this scene has already been colored by another path (shouldn't happen with scenes but good check)
+                const sceneOutputWire = wires.find(w => w.fromNode === sceneNode.id && w.fromPort === 'narrative-out');
+                if (sceneOutputWire && processedWiresInTotal.has(sceneOutputWire.id)) {
+                    return; // Already handled
+                }
+                _traceAndColorRecursive(sceneNode.id, getNewPathColor(), processedWiresInTotal, new Set());
+            });
+
+            // Handle nodes that might start paths but are not Scenes (e.g., orphaned nodes or complex sub-graphs)
+            // This ensures that even if a node isn't connected to a Scene, its outgoing paths get colored.
+            nodes.filter(n => n.type !== 'Scene' && n.type !== 'Character' && n.type !== 'Terminate').forEach(node => {
+                // Check if this node is a starting point of a path segment not yet colored
+                // A node is a starting point if it has no 'general-input' wire connected to it,
+                // or if it's a Directive and its option wires haven't been processed.
+                const hasGeneralInput = wires.some(w => w.toNode === node.id && (w.toPort === 'general-input'));
+
+                if (!hasGeneralInput) { // If no incoming wire to general input, it might be a start of a new path segment
+                    let startsNewPathSegment = false;
+                    if (node.type === 'Directive') {
+                        // If any of its option wires haven't been processed, it's a new path start from those options
+                        if (node.properties.options.some(opt => {
+                            const optWire = wires.find(w => w.fromNode === node.id && w.fromPort === `option-${opt.id}`);
+                            return optWire && !processedWiresInTotal.has(optWire.id);
+                        })) {
+                            startsNewPathSegment = true;
+                        }
+                    } else {
+                        // For other nodes, if their general output wire hasn't been processed
+                        const generalOutputWire = wires.find(w => w.fromNode === node.id && w.fromPort === 'general-output');
+                        if (generalOutputWire && !processedWiresInTotal.has(generalOutputWire.id)) {
+                            startsNewPathSegment = true;
+                        }
+                    }
+
+                    if (startsNewPathSegment) {
+                        // For directives, the color is assigned per branch in _traceAndColorRecursive.
+                        // For others, assign a new color for this "orphan" path.
+                        const initialColorForOrphanPath = (node.type === 'Directive') ? 'directive_placeholder' : getNewPathColor();
+                        _traceAndColorRecursive(node.id, initialColorForOrphanPath, processedWiresInTotal, new Set());
+                    }
+                }
+            });
+
+            // Fallback for any wires that somehow didn't get colored (e.g. wires to non-existent nodes after a bad load)
             wires.forEach(wire => {
-                const fromNodeEl = document.getElementById(wire.fromNode);
-                const toNodeEl = document.getElementById(wire.toNode);
+                if (!wireCalculatedColors.has(wire.id)) {
+                    wireCalculatedColors.set(wire.id, '#AAAAAA'); // A neutral fallback color
+                }
+            });
+        }
+        // --- END NEW Wire Coloring Logic ---
+
+
+        function redrawWires() {
+            wiresSvg.innerHTML = ''; // Clear existing wires
+            const graphCanvasRect = graphCanvas.getBoundingClientRect();
+            wires.forEach(wire => {
+                const fromNodeEl = document.getElementById(wire.fromNode), toNodeEl = document.getElementById(wire.toNode);
+                // Ensure both source and target nodes exist in the DOM
                 if (!fromNodeEl || !toNodeEl) {
-                    wires = wires.filter(w => w.id !== wire.id); 
                     return;
                 }
-
-                const fromPortEl = fromNodeEl.querySelector(`.node-port[data-port-id="${wire.fromPort}"]`);
-                const toPortEl = toNodeEl.querySelector(`.node-port[data-port-id="${wire.toPort}"]`);
-
+                const fromPortEl = fromNodeEl.querySelector(`.node-port[data-port-id="${wire.fromPort}"]`), toPortEl = toNodeEl.querySelector(`.node-port[data-port-id="${wire.toPort}"]`);
+                // Ensure both source and target ports exist on the nodes
                 if (!fromPortEl || !toPortEl) {
-                     wires = wires.filter(w => w.id !== wire.id); 
                     return;
                 }
 
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                
-                const fromPortRect = fromPortEl.getBoundingClientRect();
-                const toPortRect = toPortEl.getBoundingClientRect();
 
-                const x1_world = (fromPortRect.left + fromPortRect.width / 2 - graphCanvasRect.left - panX) / currentZoom;
-                const y1_world = (fromPortRect.top + fromPortRect.height / 2 - graphCanvasRect.top - panY) / currentZoom;
-                const x2_world = (toPortRect.left + toPortRect.width / 2 - graphCanvasRect.left - panX) / currentZoom;
-                const y2_world = (toPortRect.top + toPortRect.height / 2 - graphCanvasRect.top - panY) / currentZoom;
-                
-                const dx = Math.abs(x1_world - x2_world) * 0.5;
-                const d = `M ${x1_world} ${y1_world} C ${x1_world + dx} ${y1_world}, ${x2_world - dx} ${y2_world}, ${x2_world} ${y2_world}`;
-                
-                line.setAttribute('d', d);
+                const fromPortRect = fromPortEl.getBoundingClientRect(), toPortRect = toPortEl.getBoundingClientRect();
+                // Calculate wire start/end points relative to the worldContainer (taking pan and zoom into account)
+                const x1w = (fromPortRect.left + fromPortRect.width/2 - graphCanvasRect.left - panX)/currentZoom;
+                const y1w = (fromPortRect.top + fromPortRect.height/2 - graphCanvasRect.top - panY)/currentZoom;
+                const x2w = (toPortRect.left + toPortRect.width/2 - graphCanvasRect.left - panX)/currentZoom;
+                const y2w = (toPortRect.top + toPortRect.height/2 - graphCanvasRect.top - panY)/currentZoom;
+                const dx = Math.abs(x1w - x2w) * 0.5; // Control point offset for bezier curve
+                line.setAttribute('d', `M ${x1w} ${y1w} C ${x1w + dx} ${y1w}, ${x2w - dx} ${y2w}, ${x2w} ${y2w}`);
                 line.classList.add('wire');
-                line.style.stroke = wire.color || '#6b7280';
+
+                // MODIFIED: Use calculated color from wireCalculatedColors map
+                const wireColor = wireCalculatedColors.get(wire.id) || (darkModeEnabled ? '#9ca3af' : '#6b7280'); // Fallback to theme default
+                line.style.stroke = wireColor;
                 wiresSvg.appendChild(line);
             });
         }
 
         function stopWiring() {
-            isWiring = false;
-            startPort = null;
-            if (tempWire) {
-                tempWire.remove();
-                tempWire = null;
-            }
-            document.body.style.cursor = 'default';
+            isWiring = false; startPort = null;
+            if (tempWire) { tempWire.remove(); tempWire = null; }
+            document.body.style.cursor = 'default'; // Reset cursor
         }
 
-        // --- Canvas Interaction (Pan & Zoom) ---
+
         graphCanvas.addEventListener('mousedown', (e) => {
-            if (e.target === graphCanvas || e.target === worldContainer) { 
-                isPanning = true;
-                lastPanPosition = { x: e.clientX, y: e.clientY };
-                graphCanvas.style.cursor = 'grabbing';
-                selectNode(null); 
-                hideContextMenu();
+            // Start panning if mousedown on canvas background
+            if (e.target === graphCanvas || e.target === worldContainer) {
+                isPanning = true; lastPanPosition = { x: e.clientX, y: e.clientY };
+                graphCanvas.style.cursor = 'grabbing'; selectNode(null); hideContextMenu();
             }
         });
 
         document.addEventListener('mousemove', (e) => {
-            lastMouseScreenX = e.clientX; 
-            lastMouseScreenY = e.clientY;
-
-            if (selectedElement && !isWiring) { 
-                e.preventDefault();
-                const graphCanvasRect = graphCanvas.getBoundingClientRect();
-                const mouseViewportX = e.clientX - graphCanvasRect.left;
-                const mouseViewportY = e.clientY - graphCanvasRect.top;
-
-                const newWorldX = (mouseViewportX - panX) / currentZoom - offset.x;
-                const newWorldY = (mouseViewportY - panY) / currentZoom - offset.y;
-
+            lastMouseScreenX = e.clientX; lastMouseScreenY = e.clientY; // Store last mouse position
+            if (selectedElement && !isWiring) { // Dragging a node
+                e.preventDefault(); const rect = graphCanvas.getBoundingClientRect();
+                // Calculate new node position in world coordinates
+                const newWorldX = (e.clientX - rect.left - panX) / currentZoom - offset.x;
+                const newWorldY = (e.clientY - rect.top - panY) / currentZoom - offset.y;
                 const node = findNodeById(selectedElement.id);
-                if (node) {
-                    node.x = newWorldX;
-                    node.y = newWorldY;
-                }
-                selectedElement.style.left = `${newWorldX}px`;
-                selectedElement.style.top = `${newWorldY}px`;
-                redrawWires();
-            } else if (isPanning) {
-                e.preventDefault();
-                const dx = e.clientX - lastPanPosition.x;
-                const dy = e.clientY - lastPanPosition.y;
-                panX += dx;
-                panY += dy;
-                lastPanPosition = { x: e.clientX, y: e.clientY };
-                updateWorldTransform(); 
-                 redrawWires(); 
-            } else if (isWiring && tempWire && startPort) {
-                e.preventDefault();
-                const fromPortRect = startPort.getBoundingClientRect(); 
-                const graphCanvasRect = graphCanvas.getBoundingClientRect();
-                
-                const x1_world = (fromPortRect.left + fromPortRect.width / 2 - graphCanvasRect.left - panX) / currentZoom;
-                const y1_world = (fromPortRect.top + fromPortRect.height / 2 - graphCanvasRect.top - panY) / currentZoom;
-                
-                const mouseWorldCoords = getGraphCoordinates(e.clientX, e.clientY); 
-                const x2_world = mouseWorldCoords.x;
-                const y2_world = mouseWorldCoords.y;
-
-                tempWire.setAttribute('x1', x1_world);
-                tempWire.setAttribute('y1', y1_world);
-                tempWire.setAttribute('x2', x2_world);
-                tempWire.setAttribute('y2', y2_world);
+                if (node) { node.x = newWorldX; node.y = newWorldY; }
+                selectedElement.style.left = `${newWorldX}px`; selectedElement.style.top = `${newWorldY}px`;
+                redrawWires(); // Redraw wires as node moves
+            } else if (isPanning) { // Panning the canvas
+                e.preventDefault(); const dx = e.clientX - lastPanPosition.x, dy = e.clientY - lastPanPosition.y;
+                panX += dx; panY += dy; lastPanPosition = { x: e.clientX, y: e.clientY };
+                updateWorldTransform(); redrawWires();
+            } else if (isWiring && tempWire && startPort) { // Drawing a temporary wire
+                e.preventDefault(); const fromRect = startPort.getBoundingClientRect(), graphRect = graphCanvas.getBoundingClientRect();
+                // Calculate temp wire end point in world coordinates
+                const x1w = (fromRect.left + fromRect.width/2 - graphRect.left - panX)/currentZoom;
+                const y1w = (fromRect.top + fromRect.height/2 - graphRect.top - panY)/currentZoom;
+                const mouseWorld = getGraphCoordinates(e.clientX, e.clientY);
+                tempWire.setAttribute('x1', x1w); tempWire.setAttribute('y1', y1w);
+                tempWire.setAttribute('x2', mouseWorld.x); tempWire.setAttribute('y2', mouseWorld.y);
             }
         });
 
         document.addEventListener('mouseup', (e) => {
-            if (selectedElement) {
-                selectedElement.style.cursor = 'grab';
-                selectedElement = null;
-                attemptSaveToCookies(); 
-            }
-            if (isPanning) {
-                isPanning = false;
-                graphCanvas.style.cursor = 'grab';
-            }
-            if (isWiring) {
-                if (!e.target.classList.contains('node-port')) {
-                     stopWiring();
-                }
-            }
+            if (selectedElement) { selectedElement.style.cursor = 'grab'; selectedElement = null; attemptSaveGraphToCookies(); }
+            if (isPanning) { isPanning = false; graphCanvas.style.cursor = 'grab'; }
+            // If wiring and mouseup is not on a port, stop wiring (mouseup on port is handled by port's listener)
+            if (isWiring && !e.target.classList.contains('node-port')) stopWiring();
         });
 
-        graphCanvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const zoomSpeed = 0.05; 
-            const oldZoom = currentZoom;
-            
-            const graphCanvasRect = graphCanvas.getBoundingClientRect();
-            const mouseXInViewport = e.clientX - graphCanvasRect.left; 
-            const mouseYInViewport = e.clientY - graphCanvasRect.top; 
-
-            const mouseWorldXBeforeZoom = (mouseXInViewport - panX) / oldZoom;
-            const mouseWorldYBeforeZoom = (mouseYInViewport - panY) / oldZoom;
-
-            if (e.deltaY < 0) { 
-                currentZoom = Math.min(currentZoom + zoomSpeed * currentZoom, 3); 
-            } else { 
-                currentZoom = Math.max(currentZoom - zoomSpeed * currentZoom, 0.1); 
-            }
-            
-            panX = mouseXInViewport - mouseWorldXBeforeZoom * currentZoom;
-            panY = mouseYInViewport - mouseWorldYBeforeZoom * currentZoom;
-            
-            updateWorldTransform(); 
-            redrawWires(); 
-        }, { passive: false });
+        graphCanvas.addEventListener('wheel', (e) => { // Zooming
+            e.preventDefault(); const speed = 0.05, oldZoom = currentZoom;
+            const rect = graphCanvas.getBoundingClientRect();
+            // Calculate mouse position in viewport coordinates
+            const mouseVX = e.clientX - rect.left, mouseVY = e.clientY - rect.top;
+            // Calculate mouse position in world coordinates before zoom
+            const mouseWXBefore = (mouseVX - panX) / oldZoom, mouseWYBefore = (mouseVY - panY) / oldZoom;
+            // Apply zoom
+            currentZoom = e.deltaY < 0 ? Math.min(currentZoom + speed * currentZoom, 3) : Math.max(currentZoom - speed * currentZoom, 0.1);
+            // Adjust pan to keep mouse position in world coordinates the same after zoom (zoom towards mouse)
+            panX = mouseVX - mouseWXBefore * currentZoom; panY = mouseVY - mouseWYBefore * currentZoom;
+            updateWorldTransform(); redrawWires();
+        }, { passive: false }); // passive:false to allow preventDefault
 
 
-        // --- Left Panel Node Drag & Drop ---
         function initializeLeftPanel() {
             NODE_TYPES.forEach(type => {
-                const el = document.createElement('div');
-                el.classList.add('panel-node-type');
-                el.textContent = type;
-                el.draggable = true;
-                el.dataset.nodeType = type;
-                el.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/plain', type);
-                    e.dataTransfer.effectAllowed = 'copy';
-                });
+                const el = document.createElement('div'); el.classList.add('panel-node-type');
+                el.textContent = type; el.draggable = true; el.dataset.nodeType = type;
+                el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', type); e.dataTransfer.effectAllowed = 'copy'; });
                 leftPanel.appendChild(el);
             });
         }
-
-        graphCanvas.addEventListener('dragover', (e) => {
-            e.preventDefault(); 
-            e.dataTransfer.dropEffect = 'copy';
-        });
-
+        graphCanvas.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
         graphCanvas.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const nodeType = e.dataTransfer.getData('text/plain');
+            e.preventDefault(); const nodeType = e.dataTransfer.getData('text/plain');
             if (NODE_TYPES.includes(nodeType)) {
                 const worldCoords = getGraphCoordinates(e.clientX, e.clientY);
                 addNodeToGraph(nodeType, worldCoords.x, worldCoords.y);
@@ -1215,708 +1805,641 @@
         });
 
 
-        // --- Context Menu ---
         let contextMenuTargetNodeId = null;
-        
         function showContextMenu(menuItems, screenX, screenY) {
-            contextMenu.innerHTML = '';
+            contextMenu.innerHTML = ''; // Clear previous items
             menuItems.forEach(item => {
-                const menuItemEl = document.createElement('div');
-                menuItemEl.classList.add('context-menu-item');
-                menuItemEl.textContent = item.label;
-                menuItemEl.addEventListener('click', () => {
-                    item.action();
-                    hideContextMenu();
-                });
-                contextMenu.appendChild(menuItemEl);
+                const miEl = document.createElement('div'); miEl.classList.add('context-menu-item');
+                miEl.textContent = item.label;
+                miEl.addEventListener('click', () => { item.action(); hideContextMenu(); });
+                contextMenu.appendChild(miEl);
             });
-            contextMenu.style.left = `${screenX}px`;
-            contextMenu.style.top = `${screenY}px`;
+            contextMenu.style.left = `${screenX}px`; contextMenu.style.top = `${screenY}px`;
             contextMenu.classList.remove('hidden');
         }
-
-        function populateAndShowAddNodeMenu(worldX, worldY, screenX, screenY) {
-            const addNodeMenuItems = NODE_TYPES.map(type => ({
-                label: `Add ${type} Node`,
-                action: () => addNodeToGraph(type, worldX, worldY)
-            }));
-            showContextMenu(addNodeMenuItems, screenX, screenY);
+        function populateAndShowAddNodeMenu(worldX, worldY, screenX, screenY) { // Context menu for adding nodes
+            const items = NODE_TYPES.map(type => ({ label: `Add ${type} Node`, action: () => addNodeToGraph(type, worldX, worldY) }));
+            showContextMenu(items, screenX, screenY);
         }
-
-
         graphCanvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            hideContextMenu(); 
-
+            e.preventDefault(); hideContextMenu(); // Hide any existing menu
             const targetNodeEl = e.target.closest('.node');
-            const worldCoords = getGraphCoordinates(e.clientX, e.clientY); 
-
+            const worldCoords = getGraphCoordinates(e.clientX, e.clientY);
             let menuItems = [];
-
-            if (targetNodeEl) {
-                contextMenuTargetNodeId = targetNodeEl.id;
-                selectNode(contextMenuTargetNodeId); 
+            if (targetNodeEl) { // Right-clicked on a node
+                contextMenuTargetNodeId = targetNodeEl.id; selectNode(contextMenuTargetNodeId);
                 menuItems.push({ label: 'Delete Node', action: () => deleteSelectedNode() });
                 menuItems.push({ label: 'Duplicate Node', action: () => duplicateNode(contextMenuTargetNodeId) });
-                if (findNodeById(contextMenuTargetNodeId)?.type !== 'Scene') { 
+                if (findNodeById(contextMenuTargetNodeId)?.type !== 'Scene') { // "Read Story" not for Scene nodes
                      menuItems.push({ label: 'Read Story Up To Here', action: () => displayStoryToNode(contextMenuTargetNodeId) });
                 }
                 showContextMenu(menuItems, e.clientX, e.clientY);
-            } else {
+            } else { // Right-clicked on canvas background
                 contextMenuTargetNodeId = null;
                 populateAndShowAddNodeMenu(worldCoords.x, worldCoords.y, e.clientX, e.clientY);
             }
         });
-
-        function hideContextMenu() {
-            contextMenu.classList.add('hidden');
-            contextMenuTargetNodeId = null;
-        }
-        
+        function hideContextMenu() { contextMenu.classList.add('hidden'); contextMenuTargetNodeId = null; }
         function duplicateNode(nodeId) {
-            const originalNode = findNodeById(nodeId);
-            if (!originalNode) return;
-            const newNodeProps = JSON.parse(JSON.stringify(originalNode.properties)); 
-            addNodeToGraph(originalNode.type, originalNode.x + 20 / currentZoom, originalNode.y + 20 / currentZoom, newNodeProps);
+            const originalNode = findNodeById(nodeId); if (!originalNode) return;
+            const newNodeProps = JSON.parse(JSON.stringify(originalNode.properties)); // Deep copy properties
+            addNodeToGraph(originalNode.type, originalNode.x + 20/currentZoom, originalNode.y + 20/currentZoom, newNodeProps);
         }
 
 
-        // --- Keyboard Shortcuts ---
         document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                e.preventDefault(); 
-                if (alwaysDownloadOnSave) {
-                    showToast("Downloading graph as JSON file...");
-                    downloadGraphAsJson();
-                } else {
-                    const saveResult = attemptSaveToCookies();
-                    if (saveResult === 'saved_single') {
-                        showToast("Graph saved to cookies!");
-                    } else if (saveResult === 'saved_sliced') {
-                        const numSlices = parseInt(getCookie('storyGraphData_slices') || '0', 10);
-                        showToast(`Graph saved in ${numSlices} cookie(s) due to size.`);
-                    } else if (saveResult === 'save_failed_too_large') {
-                        showToast("Graph too large for cookies. Downloading as JSON file instead.");
-                        downloadGraphAsJson();
-                    }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { // Ctrl+S or Cmd+S for saving
+                e.preventDefault();
+                if (alwaysDownloadOnSave) { showToast("Downloading graph as JSON file..."); downloadGraphAsJson(); }
+                else {
+                    const saveResult = attemptSaveGraphToCookies();
+                    if (saveResult === 'saved_single') showToast("Graph saved to cookies!");
+                    else if (saveResult === 'saved_sliced') showToast(`Graph saved in ${parseInt(getCookie(GRAPH_DATA_SLICES_COOKIE) || '0')} cookie(s).`);
+                    else if (saveResult === 'save_failed_too_large') { showToast("Graph too large for cookies. Downloading instead."); downloadGraphAsJson(); }
                 }
-                return; 
-            }
-            
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-                return; 
+                return;
             }
 
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                deleteSelectedNode();
-            }
-            if (e.key === 'Escape') {
+            // Ignore keydowns if an input field is focused
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') deleteSelectedNode();
+            if (e.key === 'Escape') { // Escape key closes modals/panels, deselects node
                 settingsPanel.classList.toggle('open');
-                readStoryModal.classList.add('hidden'); 
+                readStoryModal.classList.add('hidden');
                 hideContextMenu();
-                selectNode(null); 
+                selectNode(null);
             }
-            if (e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-                e.preventDefault();
-                const worldCoords = getGraphCoordinates(lastMouseScreenX, lastMouseScreenY);
+            if (e.shiftKey && (e.key === 'A' || e.key === 'a')) { // Shift+A to open "add node" context menu
+                e.preventDefault(); const worldCoords = getGraphCoordinates(lastMouseScreenX, lastMouseScreenY);
                 populateAndShowAddNodeMenu(worldCoords.x, worldCoords.y, lastMouseScreenX, lastMouseScreenY);
             }
         });
 
-        // --- Startup Modal & Cookie Logic ---
-        function checkSavedGraph() {
-            const savedGraphJSON = getCookie('storyGraphData_slices'); 
-            if (savedGraphJSON || getCookie('storyGraphData_0')) { 
-                openSavedStoryBtn.classList.remove('hidden');
-            } else {
-                openSavedStoryBtn.classList.add('hidden');
-            }
+
+        function checkSavedGraph() { // Check if any graph data exists in cookies
+            return getCookie(GRAPH_DATA_SLICES_COOKIE) || getCookie(`${GRAPH_DATA_COOKIE_PREFIX}0`) || getCookie('storyGraphData');
         }
 
         newStoryBtn.addEventListener('click', () => {
-            clearGraph();
-            addNodeToGraph('Scene', 50, 50); 
-            startupModal.classList.add('hidden');
+            if (checkSavedGraph()) { // If a graph is saved, ask for confirmation
+                confirmNewGraphModal.classList.remove('hidden');
+                backupCurrentGraphCheckbox.checked = true; // Default to backing up
+            } else { // No saved graph, just start fresh
+                clearGraph();
+                addNodeToGraph('Scene', 50, 50); // Add a default Scene node
+                startupModal.classList.add('hidden');
+                attemptSaveGraphToCookies();
+            }
         });
+
+        confirmNewGraphCancelBtn.addEventListener('click', () => {
+            confirmNewGraphModal.classList.add('hidden');
+        });
+
+        confirmNewGraphConfirmBtn.addEventListener('click', () => {
+            if (backupCurrentGraphCheckbox.checked) {
+                const backupSuccess = downloadSavedGraphFromCookies();
+            }
+            clearGraph();
+            addNodeToGraph('Scene', 50, 50);
+            startupModal.classList.add('hidden');
+            confirmNewGraphModal.classList.add('hidden');
+            attemptSaveGraphToCookies();
+        });
+
 
         openSavedStoryBtn.addEventListener('click', () => {
             loadGraphFromCookies();
             startupModal.classList.add('hidden');
         });
 
-        // --- Save & Load ---
-        function attemptSaveToCookies() { 
-            if (alwaysDownloadOnSave && (event && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's')) {
-                return 'download_preferred';
+        clearSavedGraphBtn.addEventListener('click', () => {
+            deleteCookiesByPrefix(GRAPH_DATA_COOKIE_PREFIX);
+            deleteCookie(GRAPH_DATA_SLICES_COOKIE);
+            deleteCookie('storyGraphData'); // Legacy single cookie
+            showToast("Saved graph data cleared from cookies.");
+            const openSavedBtnInModal = document.querySelector('#startup-modal #open-saved-story-btn');
+            if (openSavedBtnInModal && !checkSavedGraph()) { // Hide "Open Saved" if no graph exists
+                openSavedBtnInModal.classList.add('hidden');
             }
+        });
 
+
+
+        function attemptSaveGraphToCookies() {
             const graphData = {
-                nodes: nodes,
-                wires: wires,
-                panX: panX,
-                panY: panY,
-                currentZoom: currentZoom,
-                darkMode: document.body.classList.contains('dark'),
-                highestZIndex: highestZIndex,
-                storyTitle: storyTitle,
-                storyAuthor: storyAuthor,
-                storyTags: storyTags,
-                alwaysDownloadOnSave: alwaysDownloadOnSave
+                nodes: nodes, wires: wires, panX: panX, panY: panY, currentZoom: currentZoom,
+                highestZIndex: highestZIndex, storyTitle: storyTitle, storyAuthor: storyAuthor, storyTags: storyTags
             };
             try {
                 const jsonString = JSON.stringify(graphData);
-                const encodedJsonString = encodeURIComponent(jsonString);
-
-                if (encodedJsonString.length <= COOKIE_SLICE_MAX_LENGTH) {
-                    deleteCookiesByPrefix('storyGraphData_'); 
-                    deleteCookie('storyGraphData_slices');
-                    setCookie('storyGraphData_0', encodedJsonString, 7);
-                    setCookie('storyGraphData_slices', '1', 7);
+                const encodedJsonString = encodeURIComponent(jsonString); // URI encode for cookie safety
+                if (encodedJsonString.length <= COOKIE_SLICE_MAX_LENGTH) { // Small enough for one cookie
+                    deleteCookiesByPrefix(GRAPH_DATA_COOKIE_PREFIX); deleteCookie(GRAPH_DATA_SLICES_COOKIE); // Clear old slices
+                    setCookie(`${GRAPH_DATA_COOKIE_PREFIX}0`, encodedJsonString, 365);
+                    setCookie(GRAPH_DATA_SLICES_COOKIE, '1', 365); // Record number of slices
                     return 'saved_single';
-                } else {
+                } else { // Too large, need to slice
                     const numSlices = Math.ceil(encodedJsonString.length / COOKIE_SLICE_MAX_LENGTH);
-                    if (numSlices > MAX_COOKIE_SLICES) {
-                        console.warn(`Graph data too large for even ${MAX_COOKIE_SLICES} cookie slices. Ctrl+S will download.`);
-                        return 'save_failed_too_large'; 
-                    }
-
-                    deleteCookie('storyGraphData'); 
-                    deleteCookiesByPrefix('storyGraphData_'); 
-
+                    if (numSlices > MAX_COOKIE_SLICES) return 'save_failed_too_large'; // Exceeds max slices
+                    deleteCookiesByPrefix(GRAPH_DATA_COOKIE_PREFIX); deleteCookie(GRAPH_DATA_SLICES_COOKIE); // Clear old slices
                     for (let i = 0; i < numSlices; i++) {
-                        const slice = encodedJsonString.substring(i * COOKIE_SLICE_MAX_LENGTH, (i + 1) * COOKIE_SLICE_MAX_LENGTH);
-                        setCookie(`storyGraphData_${i}`, slice, 7);
+                        setCookie(`${GRAPH_DATA_COOKIE_PREFIX}${i}`, encodedJsonString.substring(i*COOKIE_SLICE_MAX_LENGTH, (i+1)*COOKIE_SLICE_MAX_LENGTH), 365);
                     }
-                    setCookie('storyGraphData_slices', numSlices.toString(), 7);
+                    setCookie(GRAPH_DATA_SLICES_COOKIE, numSlices.toString(), 365);
                     return 'saved_sliced';
                 }
-            } catch (error) {
-                console.error("Error saving graph to cookies:", error);
-                return 'error'; 
+            } catch (error) { console.error("Error saving graph to cookies:", error); return 'error'; }
+        }
+
+        function downloadSavedGraphFromCookies() { // For backing up before starting new
+            let fullEncodedJsonString = "";
+            const numSlicesStr = getCookie(GRAPH_DATA_SLICES_COOKIE);
+            if (numSlicesStr) { // Sliced cookie format
+                const numSlices = parseInt(numSlicesStr, 10);
+                if (!isNaN(numSlices) && numSlices > 0) {
+                    for (let i = 0; i < numSlices; i++) {
+                        const slice = getCookie(`${GRAPH_DATA_COOKIE_PREFIX}${i}`);
+                        if (slice) {
+                            fullEncodedJsonString += slice;
+                        } else {
+                            showToast("Error: Incomplete saved graph data in cookies for backup.");
+                            return false; // Missing a slice
+                        }
+                    }
+                }
+            } else { // Try legacy single cookie format
+                fullEncodedJsonString = getCookie(`${GRAPH_DATA_COOKIE_PREFIX}0`) || getCookie('storyGraphData') || "";
+            }
+
+            if (fullEncodedJsonString) {
+                try {
+                    const decodedJsonString = decodeURIComponent(fullEncodedJsonString);
+                    const graphDataForFile = JSON.parse(decodedJsonString);
+
+                    // Prepare data for download, including preferences
+                    const dataToDownload = {
+                        nodes: graphDataForFile.nodes || [],
+                        wires: graphDataForFile.wires || [],
+                        panX: graphDataForFile.panX || 0,
+                        panY: graphDataForFile.panY || 0,
+                        currentZoom: graphDataForFile.currentZoom || 1,
+                        highestZIndex: graphDataForFile.highestZIndex || 1,
+                        storyTitle: graphDataForFile.storyTitle || "story_graph_backup",
+                        storyAuthor: graphDataForFile.storyAuthor || "",
+                        storyTags: graphDataForFile.storyTags || "",
+                        // Include current user preferences in the backup
+                        darkMode: getPreference(PREF_DARK_MODE, false),
+                        alwaysDownloadOnSave: getPreference(PREF_ALWAYS_DOWNLOAD, false)
+                    };
+                    // Override with preferences from file if they exist (though less likely for cookie backup)
+                    if (typeof graphDataForFile.darkMode === 'boolean') {
+                        dataToDownload.darkMode = graphDataForFile.darkMode;
+                    }
+                    if (typeof graphDataForFile.alwaysDownloadOnSave === 'boolean') {
+                        dataToDownload.alwaysDownloadOnSave = graphDataForFile.alwaysDownloadOnSave;
+                    }
+
+
+                    const titleForFile = dataToDownload.storyTitle;
+                    const finalJsonStringToDownload = JSON.stringify(dataToDownload, null, 2);
+
+                    const blob = new Blob([finalJsonStringToDownload], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${titleForFile.toLowerCase().replace(/\s+/g, '_')}_saved_backup.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast("Saved graph from cookies backed up.");
+                    return true;
+                } catch (error) {
+                    console.error("Error processing saved graph from cookies for backup:", error);
+                    showToast("Error: Could not backup saved graph. Data might be corrupted.");
+                    return false;
+                }
+            } else {
+                showToast("No saved graph data found in cookies to backup.");
+                return false;
             }
         }
-        
-        function downloadGraphAsJson() {
-            const graphData = { nodes, wires, panX, panY, currentZoom, darkMode: document.body.classList.contains('dark'), highestZIndex, storyTitle, storyAuthor, storyTags, alwaysDownloadOnSave };
-            const jsonString = JSON.stringify(graphData, null, 2);
+
+
+        function downloadGraphAsJson() { // Download current editor state
+            const graphDataToDownload = {
+                nodes, wires, panX, panY, currentZoom, highestZIndex, storyTitle, storyAuthor, storyTags,
+                darkMode: darkModeEnabled, // Include current preferences
+                alwaysDownloadOnSave: alwaysDownloadOnSave
+            };
+            const jsonString = JSON.stringify(graphDataToDownload, null, 2); // Pretty print JSON
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'story_graph_editor_data.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `${(storyTitle || 'story_graph').toLowerCase().replace(/\s+/g, '_')}_editor_data.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         }
 
+        function loadGraphFromData(graphData, isLoadingFromFile = false) {
+            // Clear current graph state
+            nodes = []; wires = [];
+            worldContainer.querySelectorAll('.node').forEach(n => n.remove());
+            wiresSvg.innerHTML = '';
+            selectedNodeId = null; panX = 0; panY = 0; currentZoom = 1; highestZIndex = 1;
 
-        function loadGraphFromData(graphData) {
-            clearGraph(); 
+            // Load data from provided object
             nodes = graphData.nodes || [];
             wires = graphData.wires || [];
             panX = graphData.panX || 0;
             panY = graphData.panY || 0;
             currentZoom = graphData.currentZoom || 1;
-            highestZIndex = graphData.highestZIndex || (nodes.length +1);
+            highestZIndex = graphData.highestZIndex || (nodes.length + 1);
+
+            // Load story metadata
             storyTitle = graphData.storyTitle || "My Awesome Story";
             storyAuthor = graphData.storyAuthor || "";
             storyTags = graphData.storyTags || "";
-            alwaysDownloadOnSave = graphData.alwaysDownloadOnSave || false;
-
-
             storyTitleInput.value = storyTitle;
             storyAuthorInput.value = storyAuthor;
             storyTagsInput.value = storyTags;
-            alwaysDownloadToggle.checked = alwaysDownloadOnSave;
 
-
-            if (graphData.darkMode) {
-                document.body.classList.add('dark');
-                darkModeToggle.checked = true;
-            } else {
-                document.body.classList.remove('dark');
-                darkModeToggle.checked = false;
+            // If loading from a file, also load preferences from the file
+            if (isLoadingFromFile) {
+                if (typeof graphData.darkMode === 'boolean') {
+                    darkModeEnabled = graphData.darkMode;
+                    applyDarkModePreference();
+                    savePreference(PREF_DARK_MODE, darkModeEnabled); // Save loaded preference
+                }
+                if (typeof graphData.alwaysDownloadOnSave === 'boolean') {
+                    alwaysDownloadOnSave = graphData.alwaysDownloadOnSave;
+                    applyAlwaysDownloadPreference();
+                    savePreference(PREF_ALWAYS_DOWNLOAD, alwaysDownloadOnSave); // Save loaded preference
+                }
             }
-            
-            const dot = darkModeToggle.parentElement.querySelector('.dot');
-            if (darkModeToggle.checked) { dot.style.transform = 'translateX(100%)'; } 
-            else { dot.style.transform = 'translateX(0%)'; }
-            
-            const alwaysDownloadDot = alwaysDownloadToggle.closest('label').querySelector('.dot'); 
-             if (alwaysDownloadToggle.checked) { alwaysDownloadDot.style.transform = 'translateX(100%)'; } 
-            else { alwaysDownloadDot.style.transform = 'translateX(0%)'; }
-            
-            updateWorldTransform(); 
 
+            updateWorldTransform(); // Apply pan and zoom
+
+            // Recreate node elements
             nodes.forEach(node => {
-                node.zIndex = node.zIndex || highestZIndex++; 
-                const el = createNodeElement(node); 
+                node.zIndex = node.zIndex || highestZIndex++; // Ensure zIndex is set
+                if (node.type === 'Character' && (!node.properties.replaceKey || node.properties.replaceKey === '_NEW_CHAR' || node.properties.replaceKey === '_CHARACTER_A')) {
+                    node.properties.replaceKey = generateCharacterReplaceKey(node.properties.name);
+                }
+                const el = createNodeElement(node);
+                if (node.properties.isExpanded && el.querySelector('.expandable-content')) {
+                    el.querySelector('.node-content').classList.add('expanded');
+                    const advToggle = el.querySelector('.node-content button.text-blue-600');
+                    if (advToggle) advToggle.textContent = 'Advanced Options ▲';
+                }
             });
-            redrawWires();
+            updateAllWireColors(); // Calculate and assign colors for all wires
+            redrawWires(); // Redraw with new colors
         }
-        
+
         function loadGraphFromCookies() {
             let fullEncodedJsonString = "";
-            const numSlicesStr = getCookie('storyGraphData_slices');
-            
-            if (numSlicesStr) {
+            const numSlicesStr = getCookie(GRAPH_DATA_SLICES_COOKIE);
+            if (numSlicesStr) { // Sliced cookie format
                 const numSlices = parseInt(numSlicesStr, 10);
                 if (!isNaN(numSlices) && numSlices > 0) {
                     for (let i = 0; i < numSlices; i++) {
-                        const slice = getCookie(`storyGraphData_${i}`);
-                        if (slice) {
-                            fullEncodedJsonString += slice;
-                        } else {
-                            console.error(`Missing cookie slice: storyGraphData_${i}`);
-                            fullEncodedJsonString = ""; 
-                            break;
-                        }
+                        const slice = getCookie(`${GRAPH_DATA_COOKIE_PREFIX}${i}`);
+                        if (slice) fullEncodedJsonString += slice;
+                        else { fullEncodedJsonString = ""; break; } // Missing slice
                     }
                 }
-            } else {
-                const oldCookieData = getCookie('storyGraphData'); 
-                if (oldCookieData) { 
-                    fullEncodedJsonString = oldCookieData; 
-                } else { 
-                     fullEncodedJsonString = getCookie('storyGraphData_0') || "";
-                }
+            } else { // Try legacy single cookie format
+                 fullEncodedJsonString = getCookie(`${GRAPH_DATA_COOKIE_PREFIX}0`) || getCookie('storyGraphData') || "";
             }
 
             if (fullEncodedJsonString) {
                 try {
                     const decodedJsonString = decodeURIComponent(fullEncodedJsonString);
                     const graphData = JSON.parse(decodedJsonString);
-                    loadGraphFromData(graphData);
+                    loadGraphFromData(graphData, false); // false: not loading from file
                 } catch (error) {
                     console.error("Error parsing saved graph from cookies:", error);
-                    alert("Could not load saved story. Data might be corrupted.");
-                    clearGraph(); 
+                    showToast("Error: Could not load saved story. Data might be corrupted.");
                 }
-            } else if (numSlicesStr && parseInt(numSlicesStr,10) > 0) { 
-                 alert("Could not load saved story. Cookie data seems incomplete.");
-                 clearGraph();
+            } else if (numSlicesStr && parseInt(numSlicesStr,10) > 0) { // Incomplete sliced data
+                 showToast("Error: Could not load saved story. Cookie data seems incomplete.");
             }
         }
 
-        function clearGraph() {
-            nodes = [];
-            wires = [];
-            worldContainer.querySelectorAll('.node').forEach(n => n.remove()); 
+        function clearGraph() { // Reset the graph to an empty state
+            nodes = []; wires = [];
+            worldContainer.querySelectorAll('.node').forEach(n => n.remove());
             wiresSvg.innerHTML = '';
-            selectedNodeId = null;
-            panX = 0;
-            panY = 0;
-            currentZoom = 1;
-            highestZIndex = 1;
-            storyTitle = "My Awesome Story";
-            storyAuthor = "";
-            storyTags = "";
-            alwaysDownloadOnSave = false; 
+            selectedNodeId = null; panX = 0; panY = 0; currentZoom = 1; highestZIndex = 1;
+            // Reset story metadata
+            storyTitle = "My Awesome Story"; storyAuthor = ""; storyTags = "";
             storyTitleInput.value = storyTitle;
             storyAuthorInput.value = storyAuthor;
             storyTagsInput.value = storyTags;
-            alwaysDownloadToggle.checked = alwaysDownloadOnSave;
-            
-            deleteCookie('storyGraphData_slices');
-            deleteCookie('storyGraphData'); 
-            for (let i = 0; i < MAX_COOKIE_SLICES; i++) { 
-                deleteCookie(`storyGraphData_${i}`);
-            }
-
-            updateWorldTransform(); 
-            redrawWires();
+            updateAllWireColors(); // Update for the cleared state
+            updateWorldTransform(); redrawWires();
         }
 
-        function deleteCookie(name) {
-            document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax';
-        }
+
+        function deleteCookie(name) { document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax'; }
         function deleteCookiesByPrefix(prefix) {
             const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                let cookie = cookies[i];
-                const eqPos = cookie.indexOf("=");
-                const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-                if (name.startsWith(prefix)) {
-                    deleteCookie(name);
-                }
+            for (let c of cookies) {
+                const eqPos = c.indexOf("=");
+                const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim();
+                if (name.startsWith(prefix)) deleteCookie(name);
             }
         }
-
-
         function setCookie(name, value, days) {
-            let expires = "";
-            if (days) {
-                const date = new Date();
-                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-                expires = "; expires=" + date.toUTCString();
-            }
+            let expires = ""; if (days) { const d = new Date(); d.setTime(d.getTime() + (days*24*60*60*1000)); expires = "; expires="+d.toUTCString(); }
             document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
         }
         function getCookie(name) {
-            const nameEQ = name + "=";
-            const ca = document.cookie.split(';');
-            for (let i = 0; i < ca.length; i++) {
-                let c = ca[i];
-                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
-                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length); 
-            }
+            const nameEQ = name + "="; const ca = document.cookie.split(';');
+            for(let c of ca) { while (c.charAt(0)==' ') c = c.substring(1,c.length); if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length); }
             return null;
         }
 
-        // --- Settings Panel Logic ---
-        storyTitleInput.addEventListener('input', (e) => {
-            storyTitle = e.target.value;
-            attemptSaveToCookies();
-        });
-        storyAuthorInput.addEventListener('input', (e) => {
-            storyAuthor = e.target.value;
-            attemptSaveToCookies();
-        });
-        storyTagsInput.addEventListener('input', (e) => {
-            storyTags = e.target.value;
-            attemptSaveToCookies();
-        });
-        alwaysDownloadToggle.addEventListener('change', (e) => {
-            alwaysDownloadOnSave = e.target.checked;
-            const dot = e.target.closest('label').querySelector('.dot'); 
-            if (alwaysDownloadToggle.checked) { dot.style.transform = 'translateX(100%)'; }
-            else { dot.style.transform = 'translateX(0%)'; }
-            attemptSaveToCookies(); 
-        });
 
+        storyTitleInput.addEventListener('input', (e) => { storyTitle = e.target.value; attemptSaveGraphToCookies(); });
+        storyAuthorInput.addEventListener('input', (e) => { storyAuthor = e.target.value; attemptSaveGraphToCookies(); });
+        storyTagsInput.addEventListener('input', (e) => { storyTags = e.target.value; attemptSaveGraphToCookies(); });
+
+        function applyDarkModePreference() {
+            if (darkModeEnabled) document.body.classList.add('dark');
+            else document.body.classList.remove('dark');
+            darkModeToggle.checked = darkModeEnabled;
+            // Update toggle switch visual
+            const dot = darkModeToggle.closest('label').querySelector('.dot');
+            if (dot) dot.style.transform = darkModeEnabled ? 'translateX(100%)' : 'translateX(0%)';
+            redrawWires(); // Redraw wires as default fallback color might change
+        }
+        function applyAlwaysDownloadPreference() {
+            alwaysDownloadToggle.checked = alwaysDownloadOnSave;
+            const dot = alwaysDownloadToggle.closest('label').querySelector('.dot');
+            if (dot) dot.style.transform = alwaysDownloadOnSave ? 'translateX(100%)' : 'translateX(0%)';
+        }
 
         darkModeToggle.addEventListener('change', () => {
-            document.body.classList.toggle('dark');
-            const dot = darkModeToggle.parentElement.querySelector('.dot');
-            if (darkModeToggle.checked) {
-                 dot.style.transform = 'translateX(100%)'; 
-            } else {
-                 dot.style.transform = 'translateX(0%)';
-            }
-            attemptSaveToCookies(); 
+            darkModeEnabled = darkModeToggle.checked;
+            applyDarkModePreference();
+            savePreference(PREF_DARK_MODE, darkModeEnabled);
         });
-        
-        exportGraphJsonBtn.addEventListener('click', downloadGraphAsJson); 
-
-        exportStoryNarrativeBtn.addEventListener('click', () => {
-            const tagsArray = storyTags ? storyTags.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
-
-            const storyJSON = {
-                title: storyTitle,
-                author: storyAuthor || "Unknown Author",
-                date: new Date().toISOString().split('T')[0],
-                tags: tagsArray,
-                content: {
-                    scene: { location: "Default Location", time: "Noon", weather: "Clear" },
-                    characters: [],
-                    narrative: []
-                }
-            };
-
-            const sceneNode = nodes.find(n => n.type === 'Scene');
-            if (sceneNode) {
-                storyJSON.content.scene.location = sceneNode.properties.location || "A Scene"; 
-                
-                const firstNarrativeNodeId = wires.find(w => w.fromNode === sceneNode.id && w.fromPort === 'narrative-out')?.toNode;
-                let tempNode = findNodeById(firstNarrativeNodeId);
-                let tempCounter = 0;
-                while(tempNode && tempCounter < 5) { 
-                    if (tempNode.type === 'Time' && storyJSON.content.scene.time === "Noon") { 
-                        storyJSON.content.scene.time = tempNode.properties.time;
-                    }
-                    if (tempNode.type === 'Weather' && storyJSON.content.scene.weather === "Clear") {
-                        storyJSON.content.scene.weather = tempNode.properties.condition;
-                    }
-                    const nextWire = wires.find(w => w.fromNode === tempNode.id && w.fromPort === 'general-output');
-                    tempNode = nextWire ? findNodeById(nextWire.toNode) : null;
-                    tempCounter++;
-                }
-
-
-                wires.filter(w => w.toNode === sceneNode.id && w.toPort.startsWith('char-in-')).forEach(charWire => {
-                    const charNode = findNodeById(charWire.fromNode);
-                    if (charNode && charNode.type === 'Character') {
-                        storyJSON.content.characters.push({
-                            replace: charNode.properties.replaceKey,
-                            name: charNode.properties.name,
-                            sex: "unknown", "hair-length": "unknown", "hair-color": "#000000",
-                            "eye-color": "#000000", clothes: "unknown", controller: "unknown"
-                        });
-                    }
-                });
-            } else {
-                alert("No Scene node found. Scene details will be default. Narrative export might be incomplete.");
-            }
-            
-            let currentNarrativeNodeId = null;
-            if (sceneNode) {
-                 const sceneOutWire = wires.find(w => w.fromNode === sceneNode.id && w.fromPort === 'narrative-out');
-                 if (sceneOutWire) currentNarrativeNodeId = sceneOutWire.toNode;
-            }
-            if (!currentNarrativeNodeId) { 
-                currentNarrativeNodeId = nodes.find(n => ['Dialogue', 'Interact', 'Directive', 'Time', 'Weather'].includes(n.type) && !wires.some(w => w.toNode === n.id))?.id;
-            }
-
-            const narrativeVisited = new Set();
-            let narrativeChainCounter = 0; 
-            while (currentNarrativeNodeId && !narrativeVisited.has(currentNarrativeNodeId) && narrativeChainCounter < nodes.length * 2) {
-                narrativeVisited.add(currentNarrativeNodeId);
-                narrativeChainCounter++;
-                const node = findNodeById(currentNarrativeNodeId);
-                if (!node) break;
-
-                let narrativeItem = { type: node.type.toLowerCase() };
-                 if (node.type === 'Dialogue') {
-                    const char = findNodeById(node.properties.characterId);
-                    narrativeItem.character = char ? char.properties.replaceKey : "UNKNOWN_CHAR";
-                    narrativeItem.text = node.properties.text;
-                    if (node.properties.expression) narrativeItem.sprite = node.properties.expression;
-                    if (node.properties.pose) narrativeItem.pose = node.properties.pose;
-                    if (node.properties.overlays) narrativeItem.overlay = node.properties.overlays;
-                    storyJSON.content.narrative.push(narrativeItem);
-                } else if (node.type === 'Interact') {
-                    narrativeItem.interaction = "short-answer"; 
-                    narrativeItem.placeholder = node.properties.placeholder;
-                    narrativeItem.text = node.properties.promptText;
-                    if (node.properties.expression) narrativeItem.sprite = node.properties.expression;
-                    if (node.properties.pose) narrativeItem.pose = node.properties.pose;
-                    if (node.properties.overlays) narrativeItem.overlay = node.properties.overlays;
-                    if (node.properties.characterId) { 
-                        const char = findNodeById(node.properties.characterId);
-                        narrativeItem.character = char ? char.properties.replaceKey : "UNKNOWN_CHAR";
-                    }
-                    storyJSON.content.narrative.push(narrativeItem);
-                } else if (node.type === 'Directive') {
-                     if (node.properties.characterId) { 
-                        const char = findNodeById(node.properties.characterId);
-                        narrativeItem.character = char ? char.properties.replaceKey : "UNKNOWN_CHAR";
-                    }
-                    narrativeItem.options = node.properties.options.map((opt, index) => {
-                        const nextWire = wires.find(w => w.fromNode === node.id && w.fromPort === `option-${opt.id}`);
-                        return {
-                            summary: opt.summary,
-                            text: opt.summary, 
-                            [`i${storyJSON.content.narrative.filter(item => item.type === 'directive').length + 1}`]: index, 
-                            next_node_id: nextWire ? nextWire.toNode : null 
-                        };
-                    });
-                    storyJSON.content.narrative.push(narrativeItem);
-                }
-                
-                let nextWire = wires.find(w => w.fromNode === currentNarrativeNodeId && w.fromPort === 'general-output');
-                if (!nextWire && node.type === 'Directive' && node.properties.options.length > 0) {
-                    nextWire = wires.find(w => w.fromNode === currentNarrativeNodeId && w.fromPort === `option-${node.properties.options[0].id}`);
-                }
-                currentNarrativeNodeId = nextWire ? nextWire.toNode : null;
-            }
-
-            const jsonString = JSON.stringify(storyJSON, null, 2);
-            const blob = new Blob([jsonString], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${storyTitle.toLowerCase().replace(/\s+/g, '_') || 'story'}_narrative.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        alwaysDownloadToggle.addEventListener('change', () => {
+            alwaysDownloadOnSave = alwaysDownloadToggle.checked;
+            applyAlwaysDownloadPreference();
+            savePreference(PREF_ALWAYS_DOWNLOAD, alwaysDownloadOnSave);
         });
 
+        exportGraphJsonBtn.addEventListener('click', downloadGraphAsJson);
 
-        importJsonFile.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const graphData = JSON.parse(e.target.result);
-                        loadGraphFromData(graphData);
-                        attemptSaveToCookies(); 
-                    } catch (error) {
-                        console.error("Error importing JSON:", error);
-                        alert("Failed to import JSON. File might be corrupted or not in the correct format.");
-                    }
-                };
-                reader.readAsText(file);
-                importJsonFile.value = ''; 
-            }
-        });
-
-        // --- "Read Story Up To Node" Logic ---
-        closeReadStoryModalBtn.addEventListener('click', () => readStoryModal.classList.add('hidden'));
-
+        // --- Story Reading Logic ---
         function displayStoryToNode(targetNodeId) {
-            const paths = traceAllPathsToNode(targetNodeId);
-            storyPathDisplay.innerHTML = ''; 
+            if (!targetNodeId) return;
+            storyPathDisplay.innerHTML = ''; // Clear previous content
 
-            if (paths.length === 0) {
-                storyPathDisplay.innerHTML = '<p>No narrative path found to this node, or it is a starting node.</p>';
-            } else {
-                paths.forEach((path, index) => {
-                    if (index > 0) storyPathDisplay.appendChild(document.createElement('hr'));
-                    
-                    const pathContainer = document.createElement('div');
-                    const instructionsEl = document.createElement('p');
-                    instructionsEl.innerHTML = `<strong>Path ${index + 1} Instructions:</strong> ${path.decisions.join(' &rarr; ') || 'Direct Path'}`;
-                    pathContainer.appendChild(instructionsEl);
+            try { // Wrap path generation and display in a try-catch
+                const allPaths = traceAllPathsToNode(targetNodeId);
 
-                    let narrativeText = "";
-                    path.nodes.forEach(nodeId => {
-                        const node = findNodeById(nodeId);
-                        if (node) {
-                            let charName = "Narrator"; 
-                            if (node.properties.characterId) {
-                                const charNode = findNodeById(node.properties.characterId);
-                                if (charNode) {
-                                    charName = charNode.properties.name || charNode.properties.replaceKey || "Character";
-                                } else {
-                                    charName = "Unknown Character";
-                                }
-                            }
-
-                            if (node.type === 'Dialogue') {
-                                narrativeText += `${charName}: "${node.properties.text}"\n\n`;
-                            } else if (node.type === 'Interact') {
-                                const interactor = node.properties.characterId ? charName : "(Interaction)";
-                                narrativeText += `${interactor}: ${node.properties.promptText.replace(/\\ans\d+/g, '[INPUT]').replace(/\\mon\d+/g, '[LONG INPUT]')}\n\n`;
-                            } else if (node.type === 'Directive') {
-                                const director = node.properties.characterId ? charName : "(Decision Point)";
-                                narrativeText += `${director}: ${node.properties.promptText || 'Choose an option...'}\n\n`;
-                            }
+                if (allPaths.length === 0) {
+                    storyPathDisplay.innerHTML = '<p>No narrative path found to this node from a Scene node, or the target node is not part of a traceable path.</p>';
+                } else {
+                    allPaths.forEach((path, index) => {
+                        if (allPaths.length > 1) {
+                            storyPathDisplay.innerHTML += `<h3 class="text-lg font-semibold mt-2 mb-1">Path ${index + 1}:</h3>`;
                         }
+                        let pathHtml = '';
+                        path.nodes.forEach((nodeId, nodeIndex) => {
+                            const node = findNodeById(nodeId);
+                            if (!node) {
+                                pathHtml += '<p class="mb-1 text-red-500"><strong>Error:</strong> Referenced node not found in path.</p>';
+                                return;
+                            }
+
+                            pathHtml += `<p class="mb-1"><strong>${node.type}:</strong> `;
+                            if (node.title && node.type !== 'Scene' && node.properties && node.properties.title !== node.type) {
+                                pathHtml += `<em>${node.title}</em> - `;
+                            }
+
+                            if (!node.properties) { // Defensive check for properties object
+                                pathHtml += `(Error: Node properties missing for ${node.id})</p>`;
+                                return;
+                            }
+
+                            switch (node.type) {
+                                case 'Scene':
+                                    pathHtml += `Location: ${node.properties.title || 'Unnamed Scene'}`;
+                                    break;
+                                case 'Dialogue':
+                                    const charDia = node.properties.characterId ? findNodeById(node.properties.characterId) : null;
+                                    pathHtml += `${charDia && charDia.properties ? charDia.properties.name : 'Unknown Character'} says: "${node.properties.text || ''}"`;
+                                    break;
+                                case 'Interact':
+                                    const charInt = node.properties.characterId ? findNodeById(node.properties.characterId) : null;
+                                    pathHtml += `${charInt && charInt.properties ? charInt.properties.name : 'Unknown Character'} prompts: "${node.properties.promptText || ''}" (Player provides: ${node.properties.placeholder || 'input'})`;
+                                    break;
+                                case 'Directive':
+                                    const charDir = node.properties.characterId ? findNodeById(node.properties.characterId) : null;
+                                    pathHtml += `${charDir && charDir.properties ? charDir.properties.name : 'Unknown Character'} faces situation: "${node.properties.promptText || ''}"`;
+                                    const decisionSummary = path.decisions.find(d => d.directiveId === nodeId);
+                                    if (decisionSummary) {
+                                        pathHtml += `<br><span class="ml-4 text-sm text-gray-600 dark:text-gray-400">&rarr; Chose: "${decisionSummary.summary || 'Unnamed Option'}"</span>`;
+                                    }
+                                    break;
+                                case 'Weather': pathHtml += `Condition: ${node.properties.condition || 'Not set'}`; break;
+                                case 'Time': pathHtml += `Time set to: ${node.properties.time || 'Not set'}`; break;
+                                case 'Sound': pathHtml += `Sound: ${node.properties.selectedSoundDisplayName || 'No sound selected'}`; break;
+                                case 'Delay': pathHtml += `Delay for: ${node.properties.delaySeconds || '0'}s`; break;
+                                case 'Terminate': pathHtml += `Path Ends.`; break;
+                                default: pathHtml += `(Node properties...)`; break;
+                            }
+                            pathHtml += '</p>';
+                        });
+                        storyPathDisplay.innerHTML += pathHtml;
+                        if (index < allPaths.length - 1) storyPathDisplay.innerHTML += '<hr class="my-4 border-gray-300 dark:border-gray-600">';
                     });
-                    const textEl = document.createElement('p');
-                    textEl.textContent = narrativeText.trim();
-                    pathContainer.appendChild(textEl);
-                    storyPathDisplay.appendChild(pathContainer);
-                });
+                }
+            } catch (error) {
+                console.error("Error generating story path display:", error);
+                storyPathDisplay.innerHTML = '<p class="text-red-500">An error occurred while generating the story path. Please check the console.</p>';
             }
-            readStoryModal.classList.remove('hidden');
+            readStoryModal.classList.remove('hidden'); // Ensure modal is shown even if content generation failed
         }
 
         function traceAllPathsToNode(targetNodeId) {
             const allPaths = [];
-            let startNodes = nodes.filter(n => n.type === 'Scene');
-            if (startNodes.length === 0) { 
-                startNodes = nodes.filter(n => 
-                    !wires.some(w => w.toNode === n.id && (w.toPort === 'general-input')) && 
-                    ['Dialogue', 'Interact', 'Directive', 'Time', 'Weather'].includes(n.type)
-                );
-            }
-             if (startNodes.length === 0 && nodes.length > 0 && !nodes.find(n => n.id === targetNodeId && n.type === 'Scene')) { 
-                startNodes = [nodes.find(n => n.id !== targetNodeId && ['Dialogue', 'Interact', 'Directive', 'Time', 'Weather', 'Scene'].includes(n.type))].filter(Boolean);
+            const sceneNodes = nodes.filter(n => n.type === 'Scene');
+
+            if (sceneNodes.length === 0) { // If no scene nodes, no paths can start
+                console.warn("No Scene nodes found to start tracing paths.");
+                return [];
             }
 
-            for (const startNode of startNodes) {
-                if (startNode.id === targetNodeId && startNode.type === 'Scene') continue; 
-                dfsPathTrace(startNode.id, targetNodeId, [], [], allPaths, new Set());
-            }
-            return allPaths;
+            sceneNodes.forEach(sceneNode => {
+                // Start DFS from each scene node
+                dfsPathTrace(sceneNode.id, targetNodeId, [], [], allPaths, new Set());
+            });
+
+            // Filter paths to ensure they actually end at the targetNodeId
+            // And map them to the desired structure { nodes: [], decisions: [] }
+            return allPaths
+                .filter(path => path.nodes.length > 0 && path.nodes[path.nodes.length - 1] === targetNodeId)
+                .map(path => ({ nodes: path.nodes, decisions: path.decisions }));
         }
+
 
         function dfsPathTrace(currentNodeId, targetNodeId, currentPathNodeIds, currentPathDecisionSummaries, allPaths, visitedInCurrentPath) {
-            visitedInCurrentPath.add(currentNodeId);
-            currentPathNodeIds.push(currentNodeId);
-
-            if (currentNodeId === targetNodeId) {
-                allPaths.push({ nodes: [...currentPathNodeIds], decisions: [...currentPathDecisionSummaries] });
-                visitedInCurrentPath.delete(currentNodeId);
-                currentPathNodeIds.pop();
-                return; 
-            }
-
             const node = findNodeById(currentNodeId);
-            if (!node) { 
-                visitedInCurrentPath.delete(currentNodeId);
-                currentPathNodeIds.pop();
+            if (!node || visitedInCurrentPath.has(currentNodeId)) { // Node doesn't exist or cycle detected
                 return;
             }
-            
-            let nextPossibleWires = [];
-            if (node.type === 'Directive') {
-                node.properties.options.forEach(opt => {
-                    const wire = wires.find(w => w.fromNode === currentNodeId && w.fromPort === `option-${opt.id}`);
-                    if (wire) nextPossibleWires.push({wire: wire, decisionSummary: opt.summary});
-                });
-            } else { 
-                const portIdToUse = (node.type === 'Scene') ? 'narrative-out' : 'general-output';
-                wires.filter(w => w.fromNode === currentNodeId && w.fromPort === portIdToUse)
-                     .forEach(wire => nextPossibleWires.push({wire: wire, decisionSummary: null}));
+
+            visitedInCurrentPath.add(currentNodeId);
+            const newPathNodeIds = [...currentPathNodeIds, currentNodeId];
+            let newPathDecisionSummaries = [...currentPathDecisionSummaries]; // Copy decisions so far
+
+            if (currentNodeId === targetNodeId) { // Reached the target
+                allPaths.push({ nodes: newPathNodeIds, decisions: newPathDecisionSummaries });
+                visitedInCurrentPath.delete(currentNodeId); // Backtrack
+                return;
             }
 
-            for (const {wire, decisionSummary} of nextPossibleWires) {
-                if (wire && !visitedInCurrentPath.has(wire.toNode)) {
-                    if (decisionSummary) currentPathDecisionSummaries.push(decisionSummary);
-                    dfsPathTrace(wire.toNode, targetNodeId, currentPathNodeIds, currentPathDecisionSummaries, allPaths, visitedInCurrentPath);
-                    if (decisionSummary) currentPathDecisionSummaries.pop(); 
-                }
+            if (node.type === 'Terminate') { // Path ends
+                visitedInCurrentPath.delete(currentNodeId); // Backtrack
+                return;
             }
-            
-            visitedInCurrentPath.delete(currentNodeId);
-            currentPathNodeIds.pop();
+
+            // Determine next nodes based on current node type
+            let nextNodeWires = [];
+            if (node.type === 'Scene') {
+                nextNodeWires = wires.filter(w => w.fromNode === currentNodeId && w.fromPort === 'narrative-out');
+            } else if (['Dialogue', 'Interact', 'Weather', 'Time', 'Sound', 'Delay'].includes(node.type)) {
+                nextNodeWires = wires.filter(w => w.fromNode === currentNodeId && w.fromPort === 'general-output');
+            } else if (node.type === 'Directive') {
+                // For a directive, we explore all its options
+                if (node.properties && node.properties.options) {
+                    node.properties.options.forEach(option => {
+                        const optionWire = wires.find(w => w.fromNode === currentNodeId && w.fromPort === `option-${option.id}`);
+                        if (optionWire) {
+                            // When exploring a directive's option, record which option was "taken" for this branch of the DFS
+                            const decisionForThisBranch = { directiveId: currentNodeId, optionId: option.id, summary: option.summary };
+                            dfsPathTrace(optionWire.toNode, targetNodeId, newPathNodeIds, [...newPathDecisionSummaries, decisionForThisBranch], allPaths, new Set(visitedInCurrentPath));
+                        }
+                    });
+                }
+                visitedInCurrentPath.delete(currentNodeId); // Backtrack after exploring all directive options
+                return; // Return because directive options are handled recursively above
+            }
+
+            // For non-directive nodes that continue the path
+            nextNodeWires.forEach(wire => {
+                dfsPathTrace(wire.toNode, targetNodeId, newPathNodeIds, newPathDecisionSummaries, allPaths, new Set(visitedInCurrentPath));
+            });
+
+            visitedInCurrentPath.delete(currentNodeId); // Backtrack
+        }
+        // --- End Story Reading Logic ---
+
+
+        // --- Panel Minimize/Restore Logic ---
+        if (minimizePanelBtn && restorePanelBtn && leftPanel) {
+            minimizePanelBtn.addEventListener('click', () => {
+                leftPanel.classList.add('minimized');
+                restorePanelBtn.classList.remove('hidden');
+            });
+
+            restorePanelBtn.addEventListener('click', () => {
+                leftPanel.classList.remove('minimized');
+                restorePanelBtn.classList.add('hidden');
+            });
         }
 
 
-        // --- Initial Setup ---
-        initializeLeftPanel();
-        checkSavedGraph(); 
-        
-        const savedGraphData = getCookie('storyGraphData_slices') ? null : getCookie('storyGraphData_0'); 
-        if (getCookie('storyGraphData_slices') || savedGraphData) { 
+        async function initializeApp() {
+            // Fetch and process audio file list
             try {
-                let graphDataToLoad;
-                const numSlicesStr = getCookie('storyGraphData_slices');
-                if (numSlicesStr) {
-                    let fullEncoded = "";
-                    const numSlices = parseInt(numSlicesStr, 10);
-                    for(let i=0; i<numSlices; i++) {
-                        fullEncoded += getCookie(`storyGraphData_${i}`) || "";
-                    }
-                    if (fullEncoded) graphDataToLoad = JSON.parse(decodeURIComponent(fullEncoded));
-                } else if (savedGraphData) { 
-                     graphDataToLoad = JSON.parse(decodeURIComponent(savedGraphData));
-                } else { 
-                    const veryOldCookie = getCookie('storyGraphData');
-                    if (veryOldCookie) graphDataToLoad = JSON.parse(decodeURIComponent(veryOldCookie));
+                const response = await fetch('../assets/audio/index.php'); // Adjust path if needed
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const rawFileNames = await response.text();
+                const fileNamesArray = rawFileNames.replace(/^\[|\]$/g, "").replaceAll("\"", "").split(',').map(name => name.trim()).filter(name => name);
+                PROCESSED_SOUND_LIST = processAudioFiles(fileNamesArray);
+            } catch (error) {
+                console.error("Could not fetch or process audio file list:", error);
+                showToast("Warning: Could not load audio file list. Sound node may be incomplete.");
+                PROCESSED_SOUND_LIST = processAudioFiles([]); // Initialize with empty if fetch fails
+            }
 
 
-                if (graphDataToLoad) {
-                    if (graphDataToLoad.darkMode) {
-                        document.body.classList.add('dark');
-                        darkModeToggle.checked = true;
+            initializeLeftPanel();
+            loadPreferencesAndApply(); // Load and apply dark mode, etc.
+
+            if (checkSavedGraph()) {
+                openSavedStoryBtn.classList.remove('hidden');
+            } else {
+                openSavedStoryBtn.classList.add('hidden');
+            }
+
+            if (checkSavedGraph() && startupModal.classList.contains('hidden')) {
+                loadGraphFromCookies();
+            } else if (!checkSavedGraph() && startupModal.classList.contains('hidden')) {
+                updateAllWireColors();
+                redrawWires();
+            }
+
+
+            graphCanvas.style.cursor = 'grab'; // Set default cursor for graph canvas
+            updateWorldTransform();
+            if (nodes.length === 0 && wires.length === 0 && startupModal.classList.contains('hidden')) {
+                 updateAllWireColors();
+                 redrawWires();
+            }
+
+            // Event listener for closing Read Story modal by clicking its own backdrop
+            if (readStoryModal) {
+                readStoryModal.addEventListener('click', (event) => {
+                    if (event.target === readStoryModal) { // Check if the click is on the backdrop itself
+                        readStoryModal.classList.add('hidden');
                     }
-                    highestZIndex = graphDataToLoad.highestZIndex || 1;
-                    storyTitle = graphDataToLoad.storyTitle || "My Awesome Story";
-                    storyAuthor = graphDataToLoad.storyAuthor || "";
-                    storyTags = graphDataToLoad.storyTags || "";
-                    alwaysDownloadOnSave = graphDataToLoad.alwaysDownloadOnSave || false;
+                });
+            }
+
+            // Event listener for the dedicated close button in the Read Story modal
+            if (closeReadStoryModalBtn && readStoryModal) {
+                closeReadStoryModalBtn.addEventListener('click', () => {
+                    readStoryModal.classList.add('hidden');
+                });
+            }
+        }
+
+        function loadPreferencesAndApply() {
+            darkModeEnabled = getPreference(PREF_DARK_MODE, false);
+            alwaysDownloadOnSave = getPreference(PREF_ALWAYS_DOWNLOAD, false);
+            applyDarkModePreference();
+            applyAlwaysDownloadPreference();
+        }
+
+
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.classList.contains('hidden') && !contextMenu.contains(e.target)) {
+                hideContextMenu();
+            }
+            document.querySelectorAll('.sound-node-ui').forEach(soundUiEl => {
+                const dropdownList = soundUiEl.querySelector('.sound-dropdown-list');
+                const selectedDisplay = soundUiEl.querySelector('.selected-sound-display');
+                if (dropdownList && !dropdownList.classList.contains('hidden') && !soundUiEl.contains(e.target)) {
+                    dropdownList.classList.add('hidden');
+                    if (selectedDisplay) selectedDisplay.classList.remove('open');
+                    const arrow = selectedDisplay ? selectedDisplay.querySelector('.dropdown-arrow-symbol') : null;
+                    if (arrow) arrow.innerHTML = '&#9660;';
                 }
-            } catch (e) { console.error("Error parsing initial data from cookie", e); }
-        }
-        storyTitleInput.value = storyTitle;
-        storyAuthorInput.value = storyAuthor;
-        storyTagsInput.value = storyTags;
-        alwaysDownloadToggle.checked = alwaysDownloadOnSave;
+            });
+        });
 
-
-        const dot = darkModeToggle.parentElement.querySelector('.dot');
-        if (darkModeToggle.checked) { dot.style.transform = 'translateX(100%)'; } 
-        else { dot.style.transform = 'translateX(0%)'; }
-        
-        const alwaysDownloadDot = alwaysDownloadToggle.closest('label').querySelector('.dot'); 
-        if (alwaysDownloadToggle.checked) { alwaysDownloadDot.style.transform = 'translateX(100%)'; }
-        else { alwaysDownloadDot.style.transform = 'translateX(0%)'; }
-
-
-        graphCanvas.style.cursor = 'grab';
-        updateWorldTransform(); 
-
-        if ((getCookie('storyGraphData_slices') || getCookie('storyGraphData_0') || getCookie('storyGraphData')) && startupModal.classList.contains('hidden')) { 
-            loadGraphFromCookies();
-        }
-
+        initializeApp(); // Start the application
 
     </script>
 </body>
